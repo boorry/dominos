@@ -9,11 +9,12 @@ public class JeuDomino {
 
     public void initialiser() {
         // 1. Créer tous les dominos
-        for (int i = 0; i <= 6; i++) {
-            for (int j = i; j <= 6; j++) {
-                pioche.add(new Domino(i, j));
+        for(int gauche = 6; gauche >= 0; gauche--){
+            for(int droite = gauche; droite >= 0; droite--){
+                pioche.add(new Domino(gauche, droite));
             }
         }
+
         Collections.shuffle(pioche);
 
 
@@ -127,22 +128,14 @@ public class JeuDomino {
         System.out.println();
     }
 
-    public void listerDominos(List<Domino> dominos){
-        dominos.stream().forEach(System.out::println);
-        // pour arranger l'affichage de dominos en entier
-        for (Domino domino : dominos) {
-            
-        }
 
-/* 
-        dominos.stream()
-            .sorted((d1, d2) -> {
-                int max1 = Math.max(d1.getGauche(), d1.getDroite());
-                int max2 = Math.max(d2.getGauche(), d2.getDroite());
-                return Integer.compare(max1, max2);
-            })
-            .forEach(System.out::println);
-*/
+    public void listerDominos(List<Domino> dominos){
+       for(int gauche = 6; gauche >= 0; gauche--){
+            for(int droite = gauche; droite >= 0; droite--){
+                System.out.print(" [" + gauche + "|" + droite + "]");
+            }
+            System.out.print("\n");
+        }
     }
 
 }
