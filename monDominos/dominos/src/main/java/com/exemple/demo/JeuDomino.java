@@ -129,7 +129,12 @@ public class JeuDomino {
 
     public void listerDominos(List<Domino> dominos){
         dominos.stream().forEach(System.out::println);
+        // pour arranger l'affichage de dominos en entier
+        for (Domino domino : dominos) {
+            
+        }
 
+/* 
         dominos.stream()
             .sorted((d1, d2) -> {
                 int max1 = Math.max(d1.getGauche(), d1.getDroite());
@@ -137,7 +142,7 @@ public class JeuDomino {
                 return Integer.compare(max1, max2);
             })
             .forEach(System.out::println);
-
+*/
     }
 
 }
