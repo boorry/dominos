@@ -7,6 +7,14 @@ public class JeuDomino {
     private final Deque<Domino> table = new LinkedList<>();
     private int joueurCourantIndex;
 
+    private final Joueur Joueur_1 = new Joueur("Joueur_1");
+    private final Joueur Joueur_2 = new Joueur("Joueur_2");
+    private final Joueur Joueur_3 = new Joueur("Joueur_3");
+
+    public void lesTroisJoueurs(Joueur j1, Joueur j2, Joueur j3){
+        joueurs.add(j1); joueurs.add(j2); joueurs.add(j3);
+    }
+
     public void initialiser() {
         // 1. Créer tous les dominos
         for(int gauche = 6; gauche >= 0; gauche--){
@@ -14,36 +22,35 @@ public class JeuDomino {
                 pioche.add(new Domino(gauche, droite));
             }
         }
-
         Collections.shuffle(pioche);
-
 
         listerDominos(pioche);
 
-        // 2. Créer les joueurs
-        joueurs.add(new Joueur("Joueur 1"));
-        joueurs.add(new Joueur("Joueur 2"));
-        joueurs.add(new Joueur("Joueur 3"));
+        // 2. Créer les joueurs -> joueurs.add(new Joueur("Joueur_1"));
+        lesTroisJoueurs(Joueur_1, Joueur_2, Joueur_3);
 
         // 3. Distribuer 7 dominos chacun
-        for (int i = 0; i < 7; i++) {
-            for (Joueur joueur : joueurs) {
+        while (pioche.size() > 7) {
+            for(Joueur joueur: joueurs){
                 joueur.ajouterDomino(pioche.remove(0));
             }
         }
 
-        // 4. Chercher le double 6
-        for (int i = 0; i < joueurs.size(); i++) {
-            for (Domino d : joueurs.get(i).getMain()) {
-                if (d.getGauche() == 6 && d.getDroite() == 6) {
-                    table.add(d);
-                    joueurs.get(i).retirerDomino(d);
-                    joueurCourantIndex = i;
-                    System.out.println(joueurs.get(i).getNom() + " commence avec [6|6]");
-                    return;
-                }
-            }
-        }
+        Joueur_1.afficherDominosJoueur();
+        Joueur_2.afficherDominosJoueur();
+        Joueur_3.afficherDominosJoueur();
+
+
+        //affichePioche(pioche);
+
+        System.out.println(" -- ");
+
+        findDoubleSix(pioche);
+
+        System.out.println(" -- ");
+
+        casDeBlocage(joueurs);
+
     }
 
     public void jouer() {
@@ -128,14 +135,83 @@ public class JeuDomino {
         System.out.println();
     }
 
-
     public void listerDominos(List<Domino> dominos){
-       for(int gauche = 6; gauche >= 0; gauche--){
-            for(int droite = gauche; droite >= 0; droite--){
-                System.out.print(" [" + gauche + "|" + droite + "]");
+        int index = 0;
+        for (int i = 6; i >= 0; i--) {
+            for (int j = i; j >= 0; j--) {
+                Domino d = dominos.get(index++);
+                System.out.print(" [" + d.getGauche() + "|" + d.getDroite() + "]");
             }
-            System.out.print("\n");
+            System.out.println();
         }
     }
+
+    public void affichePioche(List<Domino> dominos){
+        System.out.print("Domino Pioche :");
+        for (Domino domino : dominos) {
+            System.out.print(" [" + domino.getGauche() + "|" + domino.getDroite() + "]");
+        }
+        System.out.print("\n");
+    }
+
+    public void findDoubleSix(List<Domino> pioche) {
+        boolean trouve = false;
+        for (Joueur joueur : joueurs) {
+            if (joueur.hasDoubleSix()) {
+                System.out.println("Le joueur " + joueur.getNom() + " possède le double 6 et commence le jeu.");
+                trouve = true;
+                break; // double six trouvé
+            }
+        }
+
+        if (!trouve) {
+            System.out.println("Aucun joueur ne possède le double 6. On affiche la pioche :");
+            affichePioche(pioche);
+        }
+    }
+
+    public void casDeBlocage(List<Joueur> joueurs){
+       if (joueurs.isEmpty()) {
+            System.out.println("Aucun joueur dans la liste");
+            return;
+        }
+    
+        // Trouver le minimum
+        int minimum = Integer.MAX_VALUE;
+        for (Joueur joueur : joueurs) {
+            int points = joueur.calculerTotalPoints();
+            if (points < minimum) {
+                minimum = points;
+            }
+        }
+    
+        // Affichage des points de chaque joueur
+        for (Joueur joueur : joueurs) {
+            System.out.println(joueur.getNom() + ": " + joueur.calculerTotalPoints() + " points");
+        }
+    
+        // Compter combien de joueurs ont le minimum
+        int nombreGagnants = 0;
+        Joueur gagnantUnique = null;
+    
+        for (Joueur joueur : joueurs) {
+            if (joueur.calculerTotalPoints() == minimum) {
+                nombreGagnants++;
+                gagnantUnique = joueur;
+            }
+        }
+    
+        if (nombreGagnants > 1) {
+            System.out.println("Égalité avec " + minimum + " points - Aucun gagnant");
+        } else {
+            System.out.println("Gagnant: " + gagnantUnique.getNom() + " avec " + minimum + " points");
+        }
+    }
+
+
+
+
+ 
+
 
 }

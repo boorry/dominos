@@ -12,7 +12,7 @@ public class App
 
         JeuDomino jeu = new JeuDomino();
         jeu.initialiser();
-        jeu.jouer();
+        //jeu.jouer();
 
         //listerDominos();
 

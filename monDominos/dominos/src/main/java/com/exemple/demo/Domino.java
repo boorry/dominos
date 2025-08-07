@@ -29,6 +29,10 @@ public class Domino {
         return gauche + droite;
     }
 
+    public boolean doubleNombre(int nombre){
+        return (gauche == nombre && droite == nombre);
+    }
+
     @Override
     public String toString() {
         return "[" + gauche + "|" + droite + "]";

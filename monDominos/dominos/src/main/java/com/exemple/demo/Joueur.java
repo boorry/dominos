@@ -20,7 +20,7 @@ public class Joueur {
         main.remove(d);
     }
 
-    public boolean aDesCoupPossibles(int gauche, int droite) {
+    public boolean possedeCoupPossible(int gauche, int droite) {
         for (Domino d : main) {
             if (d.correspond(gauche) || d.correspond(droite)) return true;
         }
@@ -33,7 +33,32 @@ public class Joueur {
         return total;
     }
 
-    public boolean aDomino(Domino d) {
+    public boolean possdeDomino(Domino d) {
         return main.contains(d);
     }
+
+    public void afficherDominosJoueur(){
+        System.out.print("Domino " + getNom() + ":");
+        for (Domino domino : main) {
+            System.out.print(" [" + domino.getGauche() + "|" + domino.getDroite() + "]");
+        }
+        System.out.print("\n");
+    }
+
+    public boolean hasDoubleSix(){
+        for(Domino domino: main){
+            if(domino.doubleNombre(6)){
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean tourJoueur(int actif, boolean isTtour){
+        if(actif == 1 || isTtour){
+            return true;
+        }
+        return false;
+    }
+
 }
