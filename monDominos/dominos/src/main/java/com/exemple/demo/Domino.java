@@ -2,6 +2,7 @@ package com.exemple.demo;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class Domino {
     private int gauche;
@@ -36,6 +37,20 @@ public class Domino {
     @Override
     public String toString() {
         return "[" + gauche + "|" + droite + "]";
+    }
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Domino domino = (Domino) o;
+        return (gauche == domino.gauche && droite == domino.droite) ||
+               (gauche == domino.droite && droite == domino.gauche);
+    }
+
+    @Override
+    public int hashCode() {
+        // Générer un hash symétrique pour [x|y] et [y|x]
+        return Objects.hash(Math.min(gauche, droite), Math.max(gauche, droite));
     }
 
 }

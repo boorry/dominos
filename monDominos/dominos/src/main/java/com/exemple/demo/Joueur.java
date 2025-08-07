@@ -33,7 +33,10 @@ public class Joueur {
         return total;
     }
 
-    public boolean possdeDomino(Domino d) {
+    public boolean posseeDomino(Domino d) {
+        if (d == null || main == null || main.isEmpty()) {
+            return false;
+        }
         return main.contains(d);
     }
 
