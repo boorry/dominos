@@ -11,10 +11,7 @@ public class App
         System.out.println( "\t ****************************************  - BEGIN FIRST DOMINOS APP -   ****************************************" );
 
         JeuDomino jeu = new JeuDomino();
-        jeu.initialiser();
-        //jeu.jouer();
-
-        //listerDominos();
+        jeu.jouerPartie();
 
 
         System.out.println( "\t ****************************************  - END DOMINOS APP -   *************************************************" );

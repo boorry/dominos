@@ -2,216 +2,326 @@ package com.exemple.demo;
 import java.util.*;
 
 public class JeuDomino {
-    private final List<Domino> pioche = new ArrayList<>();
+    private List<Domino> pioche = new ArrayList<>();
     private final List<Joueur> joueurs = new ArrayList<>();
     private final Deque<Domino> table = new LinkedList<>();
     private int joueurCourantIndex;
+    private final Map<Joueur, Integer> scores = new HashMap<>();
+    private static final int SCORE_MAX = 120;
+    private int manche;
+    private final Scanner scanner = new Scanner(System.in);
 
     private final Joueur Joueur_1 = new Joueur("Joueur_1");
     private final Joueur Joueur_2 = new Joueur("Joueur_2");
     private final Joueur Joueur_3 = new Joueur("Joueur_3");
 
-    public void lesTroisJoueurs(Joueur j1, Joueur j2, Joueur j3){
-        joueurs.add(j1); joueurs.add(j2); joueurs.add(j3);
+    public static void main(String[] args) {
+        JeuDomino jeu = new JeuDomino();
+        jeu.jouerPartie();
     }
 
-    public void initialiser() {
-        // 1. Créer tous les dominos
-        for(int gauche = 6; gauche >= 0; gauche--){
-            for(int droite = gauche; droite >= 0; droite--){
+    public void jouerPartie() {
+        // Initialiser les scores et le compteur de manches
+        scores.put(Joueur_1, 0);
+        scores.put(Joueur_2, 0);
+        scores.put(Joueur_3, 0);
+        manche = 1;
+
+        while (true) {
+            System.out.println("\n=================================");
+            System.out.println("=== Début de la Manche " + manche + " ===");
+            System.out.println("=================================");
+            initialiser();
+            Joueur gagnantManche = jouer();
+            int points = calculerPointsManche(gagnantManche);
+
+            // Ajouter les points au gagnant
+            if (gagnantManche != null) {
+                scores.put(gagnantManche, scores.get(gagnantManche) + points);
+                System.out.println(gagnantManche.getNom() + " gagne la manche " + manche + " avec " + points + " points !");
+                afficherScores();
+            } else {
+                System.out.println("Égalité dans la manche " + manche + ". Aucun point attribué.");
+                afficherScores();
+            }
+
+            // Vérifier si un joueur a atteint 120 points
+            for (Joueur joueur : joueurs) {
+                if (scores.get(joueur) >= SCORE_MAX) {
+                    System.out.println("\n=================================");
+                    System.out.println("=== Fin de la Partie après " + manche + " manches ===");
+                    System.out.println(joueur.getNom() + " gagne la partie avec " + scores.get(joueur) + " points !");
+                    System.out.println("\nRésumé final:");
+                    afficherScores();
+                    return;
+                }
+            }
+
+            manche++;
+            // Réinitialiser pour la prochaine manche
+            table.clear();
+            for (Joueur joueur : joueurs) {
+                joueur.getMain().clear();
+            }
+        }
+    }
+
+    private void initialiser() {
+        // 1. Réinitialiser la pioche
+        pioche.clear();
+        for (int gauche = 0; gauche <= 6; gauche++) {
+            for (int droite = gauche; droite <= 6; droite++) {
                 pioche.add(new Domino(gauche, droite));
             }
         }
         Collections.shuffle(pioche);
 
+        // Afficher la pioche pour débogage
         listerDominos(pioche);
 
-        // 2. Créer les joueurs -> joueurs.add(new Joueur("Joueur_1"));
-        lesTroisJoueurs(Joueur_1, Joueur_2, Joueur_3);
+        // 2. Ajouter les joueurs (si non déjà fait)
+        if (joueurs.isEmpty()) {
+            joueurs.add(Joueur_1);
+            joueurs.add(Joueur_2);
+            joueurs.add(Joueur_3);
+        }
 
-        // 3. Distribuer 7 dominos chacun
-        while (pioche.size() > 7) {
-            for(Joueur joueur: joueurs){
-                joueur.ajouterDomino(pioche.remove(0));
+        // 3. Distribuer 7 dominos à chaque joueur
+        for (Joueur joueur : joueurs) {
+            for (int i = 0; i < 7; i++) {
+                if (!pioche.isEmpty()) {
+                    joueur.ajouterDomino(pioche.remove(0));
+                }
             }
         }
 
+        // Afficher les mains des joueurs
         Joueur_1.afficherDominosJoueur();
         Joueur_2.afficherDominosJoueur();
         Joueur_3.afficherDominosJoueur();
 
-
-        //affichePioche(pioche);
-
-        System.out.println(" -- ");
-
-        findDoubleSix(pioche);
-
-        System.out.println(" -- ");
-
-        casDeBlocage(joueurs);
-
+        // 4. Déterminer le joueur qui commence
+        if (manche == 1) {
+            System.out.println(" ----- FIND HIGHEST DOUBLE ---- ");
+            joueurCourantIndex = findHighestDouble();
+            System.out.println(joueurs.get(joueurCourantIndex).getNom() + " commence la manche " + manche + ".");
+        } else {
+            joueurCourantIndex = (manche - 1) % 3;
+            System.out.println(joueurs.get(joueurCourantIndex).getNom() + " commence la manche " + manche + " (rotation).");
+        }
     }
 
-    public void jouer() {
-        Scanner scanner = new Scanner(System.in);
+    private Joueur jouer() {
         int passesConsecutives = 0;
 
         while (true) {
             Joueur joueur = joueurs.get(joueurCourantIndex);
-            System.out.println("\n" + joueur.getNom() + " joue...");
+            System.out.println("\nManche " + manche + " - Tour de " + joueur.getNom() + ":");
             afficherTable();
+            joueur.afficherDominosJoueur();
 
             boolean aJoue = false;
-            List<Domino> main = joueur.getMain();
+            List<Domino> main = new ArrayList<>(joueur.getMain());
 
-            if (!table.isEmpty()) {
-                int gauche = table.getFirst().getGauche();
-                int droite = table.getLast().getDroite();
+            while (!aJoue) {
+                if (main.isEmpty()) {
+                    System.out.println(joueur.getNom() + " n'a plus de dominos et passe son tour.");
+                    passesConsecutives++;
+                    break;
+                }
 
-                for (Domino d : new ArrayList<>(main)) {
-                    if (d.correspond(gauche)) {
-                        if (d.getDroite() == gauche) d.retourner();
-                        table.addFirst(d);
-                        joueur.retirerDomino(d);
-                        System.out.println(joueur.getNom() + " joue " + d + " à gauche.");
+                System.out.print("Entrez un domino (format x,y ou [x|y]) ou appuyez sur Entrée pour passer : ");
+                String input = scanner.nextLine().trim();
+
+                // Passage de tour avec Entrée
+                if (input.isEmpty()) {
+                    System.out.println(joueur.getNom() + " passe son tour.");
+                    passesConsecutives++;
+                    break;
+                }
+
+                Domino domino;
+                try {
+                    domino = Domino.parseDomino(input);
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Erreur : Format invalide. Utilisez [x|y] avec x,y entre 0 et 6.");
+                    continue;
+                }
+
+                // Vérifier si le domino est dans la main
+                if (!joueur.possedeDomino(domino)) {
+                    System.out.println("Erreur : Vous ne possédez pas le domino " + domino + ".");
+                    continue;
+                }
+
+                // Vérifier si le domino est jouable
+                if (table.isEmpty()) {
+                    // Premier domino : toujours jouable
+                    table.addLast(domino);
+                    joueur.retirerDomino(domino);
+                    System.out.println(joueur.getNom() + " pose " + domino + " comme premier domino.");
+                    aJoue = true;
+                    passesConsecutives = 0;
+                } else {
+                    int gaucheTable = table.getFirst().getGauche();
+                    int droiteTable = table.getLast().getDroite();
+
+                    // Vérifier correspondance avec continuité
+                    boolean canPlayLeft = domino.getDroite() == gaucheTable;
+                    boolean canPlayRight = domino.getGauche() == droiteTable;
+                    boolean canPlayLeftFlipped = domino.getGauche() == gaucheTable;
+                    boolean canPlayRightFlipped = domino.getDroite() == droiteTable;
+
+                    if (canPlayLeft || canPlayRight) {
+                        // Poser sans retourner
+                        if (canPlayLeft) {
+                            table.addFirst(domino);
+                            System.out.println(joueur.getNom() + " joue " + domino + " à gauche.");
+                        } else {
+                            table.addLast(domino);
+                            System.out.println(joueur.getNom() + " joue " + domino + " à droite.");
+                        }
+                        joueur.retirerDomino(domino);
                         aJoue = true;
-                        break;
-                    } else if (d.correspond(droite)) {
-                        if (d.getGauche() == droite) d.retourner();
-                        table.addLast(d);
-                        joueur.retirerDomino(d);
-                        System.out.println(joueur.getNom() + " joue " + d + " à droite.");
+                        passesConsecutives = 0;
+                    } else if (canPlayLeftFlipped || canPlayRightFlipped) {
+                        // Retourner le domino
+                        domino.retourner();
+                        if (canPlayLeftFlipped) {
+                            table.addFirst(domino);
+                            System.out.println(joueur.getNom() + " joue " + domino + " à gauche (retourné).");
+                        } else {
+                            table.addLast(domino);
+                            System.out.println(joueur.getNom() + " joue " + domino + " à droite (retourné).");
+                        }
+                        joueur.retirerDomino(domino);
                         aJoue = true;
-                        break;
+                        passesConsecutives = 0;
+                    } else {
+                        System.out.println("Erreur : Le domino " + domino + " ne correspond pas aux extrémités [" + gaucheTable + "|...] ou [...|" + droiteTable + "].");
                     }
                 }
-            } else {
-                // Premier tour déjà joué, ne devrait pas arriver
-            }
-
-            if (!aJoue) {
-                System.out.println(joueur.getNom() + " passe son tour.");
-                passesConsecutives++;
-            } else {
-                passesConsecutives = 0;
             }
 
             // Vérifier victoire
             if (joueur.getMain().isEmpty()) {
-                System.out.println("\n " + joueur.getNom() + " a gagné (plus de dominos) !");
-                break;
+                System.out.println("\n" + joueur.getNom() + " a gagné la manche " + manche + " (plus de dominos) !");
+                return joueur;
             }
 
             // Vérifier blocage
-            if (passesConsecutives >= 3) {
-                System.out.println("\n Jeu bloqué !");
-                Joueur gagnant = joueurs.get(0);
-                int min = gagnant.calculerTotalPoints();
-                for (Joueur j : joueurs) {
-                    int total = j.calculerTotalPoints();
-                    System.out.println(j.getNom() + " : " + total + " points");
-                    if (total < min) {
-                        min = total;
-                        gagnant = j;
-                    }
-                }
-                System.out.println(" Victoire!" + gagnant.getNom() + " gagne avec le moins de points !");
-                break;
+            if (passesConsecutives >= joueurs.size()) {
+                System.out.println("\nJeu bloqué dans la manche " + manche + " !");
+                return casDeBlocage();
             }
 
-            joueurCourantIndex = (joueurCourantIndex + 1) % 3;
+            // Passer au joueur suivant
+            joueurCourantIndex = currentTour(joueurCourantIndex + 1) - 1;
+        }
+    }
+
+    private int calculerPointsManche(Joueur gagnant) {
+        if (gagnant == null) {
+            return 0;
+        }
+        int points = 0;
+        for (Joueur joueur : joueurs) {
+            if (joueur != gagnant) {
+                points += joueur.calculerTotalPoints();
+            }
+        }
+        // lister les pioche
+        affichePioche(pioche);
+        return points;
+    }
+
+    private Joueur casDeBlocage() {
+        if (joueurs.isEmpty()) {
+            System.out.println("Aucun joueur dans la liste");
+            return null;
         }
 
-        afficherTable();
-        System.out.println(" Fin de la partie.");
+        Joueur gagnant = joueurs.get(0);
+        int minimum = gagnant.calculerTotalPoints();
+
+        for (Joueur joueur : joueurs) {
+            int points = joueur.calculerTotalPoints();
+            System.out.println(joueur.getNom() + ": " + points + " points");
+            if (points < minimum) {
+                minimum = points;
+                gagnant = joueur;
+            }
+        }
+
+        int nombreGagnants = 0;
+        for (Joueur joueur : joueurs) {
+            if (joueur.calculerTotalPoints() == minimum) {
+                nombreGagnants++;
+            }
+        }
+
+        // lister les pioche
+        affichePioche(pioche);
+
+        if (nombreGagnants > 1) {
+            System.out.println("Égalité avec " + minimum + " points - Aucun gagnant dans la manche " + manche);
+            return null;
+        } else {
+            System.out.println("Gagnant de la manche " + manche + ": " + gagnant.getNom() + " avec " + minimum + " points");
+            return gagnant;
+        }
+        
+    }
+
+    private void afficherScores() {
+        System.out.println("\nScores actuels après la manche " + manche + ":");
+        for (Joueur joueur : joueurs) {
+            System.out.println(joueur.getNom() + ": " + scores.get(joueur) + " points");
+        }
     }
 
     private void afficherTable() {
         System.out.print("Table: ");
-        for (Domino d : table) {
-            System.out.print(d + " ");
-        }
-        System.out.println();
-    }
-
-    public void listerDominos(List<Domino> dominos){
-        int index = 0;
-        for (int i = 6; i >= 0; i--) {
-            for (int j = i; j >= 0; j--) {
-                Domino d = dominos.get(index++);
-                System.out.print(" [" + d.getGauche() + "|" + d.getDroite() + "]");
+        if (table.isEmpty()) {
+            System.out.println("[Vide]");
+        } else {
+            for (Domino d : table) {
+                System.out.print(d + " ");
             }
             System.out.println();
         }
     }
 
-    public void affichePioche(List<Domino> dominos){
-        System.out.print("Domino Pioche :");
+    private void listerDominos(List<Domino> dominos) {
+        System.out.println("Pioche initiale:");
+        for (int i = 0; i < dominos.size(); i++) {
+            System.out.print(dominos.get(i));
+            if (i % 7 == 6) System.out.println();
+        }
+        System.out.println();
+    }
+
+    private void affichePioche(List<Domino> dominos) {
+        System.out.print("Domino Pioche: ");
         for (Domino domino : dominos) {
-            System.out.print(" [" + domino.getGauche() + "|" + domino.getDroite() + "]");
+            System.out.print(domino + " ");
         }
-        System.out.print("\n");
+        System.out.println();
     }
 
-    public void findDoubleSix(List<Domino> pioche) {
-        boolean trouve = false;
-        for (Joueur joueur : joueurs) {
-            if (joueur.hasDoubleSix()) {
-                System.out.println("Le joueur " + joueur.getNom() + " possède le double 6 et commence le jeu.");
-                trouve = true;
-                break; // double six trouvé
+    private int findHighestDouble() {
+        for (int valeur = 6; valeur >= 0; valeur--) {
+            for (int i = 0; i < joueurs.size(); i++) {
+                if (joueurs.get(i).hasDouble(valeur)) {
+                    return i;
+                }
             }
         }
-
-        if (!trouve) {
-            System.out.println("Aucun joueur ne possède le double 6. On affiche la pioche :");
-            affichePioche(pioche);
-        }
+        return 0;
     }
 
-    public void casDeBlocage(List<Joueur> joueurs){
-       if (joueurs.isEmpty()) {
-            System.out.println("Aucun joueur dans la liste");
-            return;
-        }
-    
-        // Trouver le minimum
-        int minimum = Integer.MAX_VALUE;
-        for (Joueur joueur : joueurs) {
-            int points = joueur.calculerTotalPoints();
-            if (points < minimum) {
-                minimum = points;
-            }
-        }
-    
-        // Affichage des points de chaque joueur
-        for (Joueur joueur : joueurs) {
-            System.out.println(joueur.getNom() + ": " + joueur.calculerTotalPoints() + " points");
-        }
-    
-        // Compter combien de joueurs ont le minimum
-        int nombreGagnants = 0;
-        Joueur gagnantUnique = null;
-    
-        for (Joueur joueur : joueurs) {
-            if (joueur.calculerTotalPoints() == minimum) {
-                nombreGagnants++;
-                gagnantUnique = joueur;
-            }
-        }
-    
-        if (nombreGagnants > 1) {
-            System.out.println("Égalité avec " + minimum + " points - Aucun gagnant");
-        } else {
-            System.out.println("Gagnant: " + gagnantUnique.getNom() + " avec " + minimum + " points");
-        }
+    public int currentTour(int current) {
+        current = (current < 1 || current > 3) ? 3 : current;
+        return (current % 3) + 1;
     }
-
-
-
-
- 
-
-
 }
