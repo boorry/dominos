@@ -2,7 +2,7 @@ package com.exemple.demo;
 import java.util.*;
 
 public class Joueur {
-    private String nom;
+        private String nom;
     private List<Domino> main = new ArrayList<>();
 
     public Joueur(String nom) {
@@ -25,6 +25,22 @@ public class Joueur {
             return false;
         }
         return main.contains(d);
+    }
+
+    public List<Domino> getDominosJouables(int gaucheTable, int droiteTable) {
+        List<Domino> jouables = new ArrayList<>();
+        if (gaucheTable == -1 && droiteTable == -1) {
+            // Table vide : tous les dominos sont jouables
+            jouables.addAll(main);
+        } else {
+            for (Domino d : main) {
+                if (d.getGauche() == gaucheTable || d.getDroite() == gaucheTable ||
+                    d.getGauche() == droiteTable || d.getDroite() == droiteTable) {
+                    jouables.add(d);
+                }
+            }
+        }
+        return jouables;
     }
 
     public void afficherDominosJoueur() {

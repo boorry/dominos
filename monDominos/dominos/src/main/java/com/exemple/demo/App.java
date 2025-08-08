@@ -12,8 +12,7 @@ public class App
 
         JeuDomino jeu = new JeuDomino();
         jeu.jouerPartie();
-
-
+     
         System.out.println( "\t ****************************************  - END DOMINOS APP -   *************************************************" );
     }
 

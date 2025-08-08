@@ -2,7 +2,7 @@ package com.exemple.demo;
 import java.util.*;
 
 public class JeuDomino {
-    private List<Domino> pioche = new ArrayList<>();
+   private List<Domino> pioche = new ArrayList<>();
     private final List<Joueur> joueurs = new ArrayList<>();
     private final Deque<Domino> table = new LinkedList<>();
     private int joueurCourantIndex;
@@ -11,20 +11,35 @@ public class JeuDomino {
     private int manche;
     private final Scanner scanner = new Scanner(System.in);
 
-    private final Joueur Joueur_1 = new Joueur("Joueur_1");
-    private final Joueur Joueur_2 = new Joueur("Joueur_2");
-    private final Joueur Joueur_3 = new Joueur("Joueur_3");
-
     public static void main(String[] args) {
         JeuDomino jeu = new JeuDomino();
         jeu.jouerPartie();
     }
 
     public void jouerPartie() {
-        // Initialiser les scores et le compteur de manches
-        scores.put(Joueur_1, 0);
-        scores.put(Joueur_2, 0);
-        scores.put(Joueur_3, 0);
+        // Saisie des noms des joueurs
+        System.out.print("Saisissez nom joueur N°1 : ");
+        String joueur_1 = scanner.nextLine().trim();
+        if (joueur_1.isEmpty()) joueur_1 = "Joueur_1";
+
+        System.out.print("Saisissez nom joueur N°2 : ");
+        String joueur_2 = scanner.nextLine().trim();
+        if (joueur_2.isEmpty()) joueur_2 = "Joueur_2";
+
+        System.out.print("Saisissez nom joueur N°3 : ");
+        String joueur_3 = scanner.nextLine().trim();
+        if (joueur_3.isEmpty()) joueur_3 = "Joueur_3";
+
+        // Initialiser les joueurs avec les noms saisis
+        joueurs.clear();
+        joueurs.add(new Joueur(joueur_1));
+        joueurs.add(new Joueur(joueur_2));
+        joueurs.add(new Joueur(joueur_3));
+
+        // Initialiser les scores
+        for (Joueur joueur : joueurs) {
+            scores.put(joueur, 0);
+        }
         manche = 1;
 
         while (true) {
@@ -79,14 +94,7 @@ public class JeuDomino {
         // Afficher la pioche pour débogage
         listerDominos(pioche);
 
-        // 2. Ajouter les joueurs (si non déjà fait)
-        if (joueurs.isEmpty()) {
-            joueurs.add(Joueur_1);
-            joueurs.add(Joueur_2);
-            joueurs.add(Joueur_3);
-        }
-
-        // 3. Distribuer 7 dominos à chaque joueur
+        // 2. Distribuer 7 dominos à chaque joueur
         for (Joueur joueur : joueurs) {
             for (int i = 0; i < 7; i++) {
                 if (!pioche.isEmpty()) {
@@ -96,11 +104,11 @@ public class JeuDomino {
         }
 
         // Afficher les mains des joueurs
-        Joueur_1.afficherDominosJoueur();
-        Joueur_2.afficherDominosJoueur();
-        Joueur_3.afficherDominosJoueur();
+        for (Joueur joueur : joueurs) {
+            joueur.afficherDominosJoueur();
+        }
 
-        // 4. Déterminer le joueur qui commence
+        // 3. Déterminer le joueur qui commence
         if (manche == 1) {
             System.out.println(" ----- FIND HIGHEST DOUBLE ---- ");
             joueurCourantIndex = findHighestDouble();
@@ -123,82 +131,112 @@ public class JeuDomino {
             boolean aJoue = false;
             List<Domino> main = new ArrayList<>(joueur.getMain());
 
-            while (!aJoue) {
-                if (main.isEmpty()) {
-                    System.out.println(joueur.getNom() + " n'a plus de dominos et passe son tour.");
+            if (main.isEmpty()) {
+                System.out.println(joueur.getNom() + " n'a plus de dominos et passe son tour.");
+                passesConsecutives++;
+            } else {
+                // Vérifier les dominos jouables
+                int gaucheTable = table.isEmpty() ? -1 : table.getFirst().getGauche();
+                int droiteTable = table.isEmpty() ? -1 : table.getLast().getDroite();
+                List<Domino> dominosJouables = joueur.getDominosJouables(gaucheTable, droiteTable);
+
+                if (dominosJouables.isEmpty()) {
+                    // Cas 1 : Aucun domino jouable
+                    System.out.println(joueur.getNom() + " n'a aucun domino jouable et passe son tour.");
                     passesConsecutives++;
-                    break;
-                }
+                } else if (dominosJouables.size() == 1) {
+                    // Cas 2 : Un seul domino jouable
+                    Domino domino = dominosJouables.get(0);
+                    if (table.isEmpty()) {
+                        table.addLast(domino);
+                        System.out.println(joueur.getNom() + " pose automatiquement " + domino + " comme premier domino.");
+                    } else {
+                        boolean canPlayLeft = domino.getDroite() == gaucheTable;
+                        boolean canPlayRight = domino.getGauche() == droiteTable;
+                        boolean canPlayLeftFlipped = domino.getGauche() == gaucheTable;
+                        boolean canPlayRightFlipped = domino.getDroite() == droiteTable;
 
-                System.out.print("Entrez un domino (format x,y ou [x|y]) ou appuyez sur Entrée pour passer : ");
-                String input = scanner.nextLine().trim();
-
-                // Passage de tour avec Entrée
-                if (input.isEmpty()) {
-                    System.out.println(joueur.getNom() + " passe son tour.");
-                    passesConsecutives++;
-                    break;
-                }
-
-                Domino domino;
-                try {
-                    domino = Domino.parseDomino(input);
-                } catch (IllegalArgumentException e) {
-                    System.out.println("Erreur : Format invalide. Utilisez [x|y] avec x,y entre 0 et 6.");
-                    continue;
-                }
-
-                // Vérifier si le domino est dans la main
-                if (!joueur.possedeDomino(domino)) {
-                    System.out.println("Erreur : Vous ne possédez pas le domino " + domino + ".");
-                    continue;
-                }
-
-                // Vérifier si le domino est jouable
-                if (table.isEmpty()) {
-                    // Premier domino : toujours jouable
-                    table.addLast(domino);
+                        if (canPlayLeft || canPlayRight) {
+                            if (canPlayLeft) {
+                                table.addFirst(domino);
+                                System.out.println(joueur.getNom() + " pose automatiquement " + domino + " à gauche.");
+                            } else {
+                                table.addLast(domino);
+                                System.out.println(joueur.getNom() + " pose automatiquement " + domino + " à droite.");
+                            }
+                        } else if (canPlayLeftFlipped || canPlayRightFlipped) {
+                            domino.retourner();
+                            if (canPlayLeftFlipped) {
+                                table.addFirst(domino);
+                                System.out.println(joueur.getNom() + " pose automatiquement " + domino + " à gauche (retourné).");
+                            } else {
+                                table.addLast(domino);
+                                System.out.println(joueur.getNom() + " pose automatiquement " + domino + " à droite (retourné).");
+                            }
+                        }
+                    }
                     joueur.retirerDomino(domino);
-                    System.out.println(joueur.getNom() + " pose " + domino + " comme premier domino.");
                     aJoue = true;
                     passesConsecutives = 0;
                 } else {
-                    int gaucheTable = table.getFirst().getGauche();
-                    int droiteTable = table.getLast().getDroite();
+                    // Cas 3 : Deux dominos ou plus
+                    System.out.print("Entrez un domino (format [x|y] ou x,y) ou appuyez sur Entrée pour passer : ");
+                    String input = scanner.nextLine().trim();
 
-                    // Vérifier correspondance avec continuité
-                    boolean canPlayLeft = domino.getDroite() == gaucheTable;
-                    boolean canPlayRight = domino.getGauche() == droiteTable;
-                    boolean canPlayLeftFlipped = domino.getGauche() == gaucheTable;
-                    boolean canPlayRightFlipped = domino.getDroite() == droiteTable;
-
-                    if (canPlayLeft || canPlayRight) {
-                        // Poser sans retourner
-                        if (canPlayLeft) {
-                            table.addFirst(domino);
-                            System.out.println(joueur.getNom() + " joue " + domino + " à gauche.");
-                        } else {
-                            table.addLast(domino);
-                            System.out.println(joueur.getNom() + " joue " + domino + " à droite.");
-                        }
-                        joueur.retirerDomino(domino);
-                        aJoue = true;
-                        passesConsecutives = 0;
-                    } else if (canPlayLeftFlipped || canPlayRightFlipped) {
-                        // Retourner le domino
-                        domino.retourner();
-                        if (canPlayLeftFlipped) {
-                            table.addFirst(domino);
-                            System.out.println(joueur.getNom() + " joue " + domino + " à gauche (retourné).");
-                        } else {
-                            table.addLast(domino);
-                            System.out.println(joueur.getNom() + " joue " + domino + " à droite (retourné).");
-                        }
-                        joueur.retirerDomino(domino);
-                        aJoue = true;
-                        passesConsecutives = 0;
+                    if (input.isEmpty()) {
+                        System.out.println(joueur.getNom() + " passe son tour.");
+                        passesConsecutives++;
                     } else {
-                        System.out.println("Erreur : Le domino " + domino + " ne correspond pas aux extrémités [" + gaucheTable + "|...] ou [...|" + droiteTable + "].");
+                        Domino domino;
+                        try {
+                            domino = Domino.parseDomino(input);
+                        } catch (IllegalArgumentException e) {
+                            System.out.println("Erreur : Format invalide. Utilisez [x|y] avec x,y entre 0 et 6.");
+                            continue;
+                        }
+
+                        if (!joueur.possedeDomino(domino)) {
+                            System.out.println("Erreur : Vous ne possédez pas le domino " + domino + ".");
+                            continue;
+                        }
+
+                        if (!dominosJouables.contains(domino)) {
+                            System.out.println("Erreur : Le domino " + domino + " ne correspond pas aux extrémités [" + gaucheTable + "|...] ou [...|" + droiteTable + "].");
+                            continue;
+                        }
+
+                        // Poser le domino
+                        if (table.isEmpty()) {
+                            table.addLast(domino);
+                            System.out.println(joueur.getNom() + " pose " + domino + " comme premier domino.");
+                        } else {
+                            boolean canPlayLeft = domino.getDroite() == gaucheTable;
+                            boolean canPlayRight = domino.getGauche() == droiteTable;
+                            boolean canPlayLeftFlipped = domino.getGauche() == gaucheTable;
+                            boolean canPlayRightFlipped = domino.getDroite() == droiteTable;
+
+                            if (canPlayLeft || canPlayRight) {
+                                if (canPlayLeft) {
+                                    table.addFirst(domino);
+                                    System.out.println(joueur.getNom() + " joue " + domino + " à gauche.");
+                                } else {
+                                    table.addLast(domino);
+                                    System.out.println(joueur.getNom() + " joue " + domino + " à droite.");
+                                }
+                            } else if (canPlayLeftFlipped || canPlayRightFlipped) {
+                                domino.retourner();
+                                if (canPlayLeftFlipped) {
+                                    table.addFirst(domino);
+                                    System.out.println(joueur.getNom() + " joue " + domino + " à gauche (retourné).");
+                                } else {
+                                    table.addLast(domino);
+                                    System.out.println(joueur.getNom() + " joue " + domino + " à droite (retourné).");
+                                }
+                            }
+                        }
+                        joueur.retirerDomino(domino);
+                        aJoue = true;
+                        passesConsecutives = 0;
                     }
                 }
             }
@@ -230,8 +268,6 @@ public class JeuDomino {
                 points += joueur.calculerTotalPoints();
             }
         }
-        // lister les pioche
-        affichePioche(pioche);
         return points;
     }
 
@@ -260,9 +296,6 @@ public class JeuDomino {
             }
         }
 
-        // lister les pioche
-        affichePioche(pioche);
-
         if (nombreGagnants > 1) {
             System.out.println("Égalité avec " + minimum + " points - Aucun gagnant dans la manche " + manche);
             return null;
@@ -270,7 +303,6 @@ public class JeuDomino {
             System.out.println("Gagnant de la manche " + manche + ": " + gagnant.getNom() + " avec " + minimum + " points");
             return gagnant;
         }
-        
     }
 
     private void afficherScores() {
