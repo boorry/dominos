@@ -2,15 +2,20 @@ package com.exemple.demo;
 import java.util.*;
 
 public class Joueur {
-        private String nom;
+    private String nom;
     private List<Domino> main = new ArrayList<>();
 
     public Joueur(String nom) {
         this.nom = nom;
     }
 
-    public String getNom() { return nom; }
-    public List<Domino> getMain() { return main; }
+    public String getNom() { 
+        return nom; 
+    }
+
+    public List<Domino> getMain() { 
+        return main; 
+    }
 
     public void ajouterDomino(Domino d) {
         main.add(d);
@@ -28,16 +33,25 @@ public class Joueur {
     }
 
     public List<Domino> getDominosJouables(int gaucheTable, int droiteTable) {
-        List<Domino> jouables = new ArrayList<>();
         if (gaucheTable == -1 && droiteTable == -1) {
-            // Table vide : tous les dominos sont jouables
-            jouables.addAll(main);
+            return  new ArrayList<>(main);
         } else {
-            for (Domino d : main) {
-                if (d.getGauche() == gaucheTable || d.getDroite() == gaucheTable ||
-                    d.getGauche() == droiteTable || d.getDroite() == droiteTable) {
-                    jouables.add(d);
-                }
+            return lesDominoJouable(main, gaucheTable, droiteTable);
+        }
+    }
+    
+    private boolean isDominoJouable(Domino item, int gaucheTable, int droiteTable){
+        return (gaucheTable == item.getGauche()
+                || droiteTable == item.getGauche() 
+                || gaucheTable == item.getDroite() 
+                || droiteTable == item.getDroite());
+    }
+
+    private List<Domino> lesDominoJouable(List<Domino> enMain, int gaucheTable, int droiteTable){
+        List<Domino> jouables = new ArrayList<>();
+        for(Domino d: enMain){
+            if(isDominoJouable(d, gaucheTable, droiteTable)){
+                jouables.add(d);
             }
         }
         return jouables;
@@ -62,7 +76,8 @@ public class Joueur {
 
     public int calculerTotalPoints() {
         int total = 0;
-        for (Domino d : main) total += d.getValeurTotale();
+        for (Domino d : main) 
+            total += d.getValeurTotale();
         return total;
     }
 }
