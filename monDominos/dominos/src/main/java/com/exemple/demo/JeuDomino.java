@@ -250,7 +250,7 @@ public class JeuDomino {
             // Vérifier blocage
             if (passesConsecutives >= joueurs.size()) {
                 System.out.println("\nJeu bloqué dans la manche " + manche + " !");
-                return casDeBlocage();
+                return casDeBlocage(joueurs);
             }
 
             // Passer au joueur suivant
@@ -271,37 +271,50 @@ public class JeuDomino {
         return points;
     }
 
-    private Joueur casDeBlocage() {
+    private Joueur casDeBlocage( List<Joueur> joueurs) {
         if (joueurs.isEmpty()) {
             System.out.println("Aucun joueur dans la liste");
             return null;
+        } 
+        else {
+            Joueur gagnant = trouverGagnantMinPoints(joueurs);
+            int minimum = gagnant.calculerTotalPoints();
+            int nombreGagnants = compterJoueursAvecMinPoints(joueurs, minimum);
+            return annoncerResultatBlocage(gagnant, nombreGagnants, minimum, manche);
         }
+    }
 
+    private Joueur trouverGagnantMinPoints(List<Joueur> joueurs){
         Joueur gagnant = joueurs.get(0);
         int minimum = gagnant.calculerTotalPoints();
-
-        for (Joueur joueur : joueurs) {
+        for(Joueur joueur: joueurs){
             int points = joueur.calculerTotalPoints();
-            System.out.println(joueur.getNom() + ": " + points + " points");
-            if (points < minimum) {
+            System.out.println(joueur.getNom() + ": " + points + " points"); // afficher les points des jouers
+            if(points < minimum){
                 minimum = points;
                 gagnant = joueur;
             }
         }
+        return gagnant;
+    }
 
+    private int compterJoueursAvecMinPoints(List<Joueur> joueurs, int minPoints){
         int nombreGagnants = 0;
-        for (Joueur joueur : joueurs) {
-            if (joueur.calculerTotalPoints() == minimum) {
+        for(Joueur joueur: joueurs){
+            if(joueur.calculerTotalPoints() == minPoints){
                 nombreGagnants++;
             }
         }
+        return nombreGagnants;
+    }
 
-        if (nombreGagnants > 1) {
-            System.out.println("Égalité avec " + minimum + " points - Aucun gagnant dans la manche " + manche);
+    private Joueur annoncerResultatBlocage(Joueur joueur, int nombreGangnant, int minimum, int manche){
+        if(nombreGangnant > 1){
+            System.out.println("Égalité avec " + minimum + " points - Aucun gagnant pour la manche " + manche);
             return null;
-        } else {
-            System.out.println("Gagnant de la manche " + manche + ": " + gagnant.getNom() + " avec " + minimum + " points");
-            return gagnant;
+        } else{
+            System.out.println("Manche - " + manche + ". " + joueur.getNom() + " possède le minimum de point:" + minimum + ". Gangne la manche.");
+            return joueur;
         }
     }
 

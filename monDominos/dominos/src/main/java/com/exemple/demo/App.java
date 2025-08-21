@@ -15,5 +15,5 @@ public class App
      
         System.out.println( "\t ****************************************  - END DOMINOS APP -   *************************************************" );
     }
-
+    // mvn exec:java -Dexec.mainClass="com.exemple.modele.App"
 }
