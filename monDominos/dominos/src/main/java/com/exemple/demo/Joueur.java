@@ -21,6 +21,10 @@ public class Joueur {
         main.add(d);
     }
 
+    public void viderMainJoueur(){
+        main.clear();
+    }
+
     public void retirerDomino(Domino d) {
         main.remove(d);
     }
@@ -79,5 +83,49 @@ public class Joueur {
         for (Domino d : main) 
             total += d.getValeurTotale();
         return total;
+    }
+
+    public void retournerDominoSiBesoin(Domino d, Deque<Domino> table) {
+        if (peutJouerAGauche(d, table)) {
+            jouerAGauche(d, table, false);
+        } else if (peutJouerADroite(d, table)) {
+            jouerADroite(d, table, false);
+        } else if (peutJouerAGaucheRetourner(d, table)) {
+            jouerAGauche(d, table, true);
+        } else if (peutJouerADroiteRetourner(d, table)) {
+            jouerADroite(d, table, true);
+        }
+    }
+
+    private void jouerAGauche(Domino d, Deque<Domino> table, boolean retourner) {
+        if (retourner) d.retourner();
+        table.addFirst(d);
+        System.out.println(getNom() + " pose automatiquement " + d + " à gauche" + (retourner ? " (retourné)" : "") + ".");
+    }
+
+    private void jouerADroite(Domino d, Deque<Domino> table, boolean retourner) {
+        if (retourner) d.retourner();
+        table.addLast(d);
+        System.out.println(getNom() + " pose automatiquement " + d + " à droite" + (retourner ? " (retourné)" : "") + ".");
+    }
+
+    private boolean peutJouerAGauche(Domino d, Deque<Domino> table) {
+        int gaucheTable = table.isEmpty() ? -1 : table.getFirst().getGauche();
+        return d.getDroite() == gaucheTable;
+    }
+
+    private boolean peutJouerADroite(Domino d, Deque<Domino> table) {
+        int droiteTable = table.isEmpty() ? -1 : table.getLast().getDroite();
+        return d.getGauche() == droiteTable;
+    }
+
+    private boolean peutJouerAGaucheRetourner(Domino d, Deque<Domino> table) {
+        int gaucheTable = table.isEmpty() ? -1 : table.getFirst().getGauche();
+        return d.getGauche() == gaucheTable;
+    }
+
+    private boolean peutJouerADroiteRetourner(Domino d, Deque<Domino> table) {
+        int droiteTable = table.isEmpty() ? -1 : table.getLast().getDroite();
+        return d.getDroite() == droiteTable;
     }
 }

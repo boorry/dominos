@@ -39,6 +39,13 @@ public class Domino {
         return (gauche == nombre && droite == nombre);
     }
 
+    public boolean isDominoJouable(Domino item, int gaucheTable, int droiteTable){
+        return (gaucheTable == item.getGauche()
+                || droiteTable == item.getGauche() 
+                || gaucheTable == item.getDroite() 
+                || droiteTable == item.getDroite());
+    }
+
     public static Domino parseDomino(String input){
         String[] valeurs = extraireValeurs(input);
         return valeurDeDomino(valeurs);

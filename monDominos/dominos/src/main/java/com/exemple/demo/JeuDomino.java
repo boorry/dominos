@@ -75,9 +75,7 @@ public class JeuDomino {
             manche++;
             // Réinitialiser pour la prochaine manche
             table.clear();
-            for (Joueur joueur : joueurs) {
-                joueur.getMain().clear();
-            }
+            initialiserMainJoueur(joueurs);
         }
     }
 
@@ -151,29 +149,7 @@ public class JeuDomino {
                         table.addLast(domino);
                         System.out.println(joueur.getNom() + " pose automatiquement " + domino + " comme premier domino.");
                     } else {
-                        boolean canPlayLeft = domino.getDroite() == gaucheTable;
-                        boolean canPlayRight = domino.getGauche() == droiteTable;
-                        boolean canPlayLeftFlipped = domino.getGauche() == gaucheTable;
-                        boolean canPlayRightFlipped = domino.getDroite() == droiteTable;
-
-                        if (canPlayLeft || canPlayRight) {
-                            if (canPlayLeft) {
-                                table.addFirst(domino);
-                                System.out.println(joueur.getNom() + " pose automatiquement " + domino + " à gauche.");
-                            } else {
-                                table.addLast(domino);
-                                System.out.println(joueur.getNom() + " pose automatiquement " + domino + " à droite.");
-                            }
-                        } else if (canPlayLeftFlipped || canPlayRightFlipped) {
-                            domino.retourner();
-                            if (canPlayLeftFlipped) {
-                                table.addFirst(domino);
-                                System.out.println(joueur.getNom() + " pose automatiquement " + domino + " à gauche (retourné).");
-                            } else {
-                                table.addLast(domino);
-                                System.out.println(joueur.getNom() + " pose automatiquement " + domino + " à droite (retourné).");
-                            }
-                        }
+                        joueur.retournerDominoSiBesoin(domino, table);
                     }
                     joueur.retirerDomino(domino);
                     aJoue = true;
@@ -210,29 +186,7 @@ public class JeuDomino {
                             table.addLast(domino);
                             System.out.println(joueur.getNom() + " pose " + domino + " comme premier domino.");
                         } else {
-                            boolean canPlayLeft = domino.getDroite() == gaucheTable;
-                            boolean canPlayRight = domino.getGauche() == droiteTable;
-                            boolean canPlayLeftFlipped = domino.getGauche() == gaucheTable;
-                            boolean canPlayRightFlipped = domino.getDroite() == droiteTable;
-
-                            if (canPlayLeft || canPlayRight) {
-                                if (canPlayLeft) {
-                                    table.addFirst(domino);
-                                    System.out.println(joueur.getNom() + " joue " + domino + " à gauche.");
-                                } else {
-                                    table.addLast(domino);
-                                    System.out.println(joueur.getNom() + " joue " + domino + " à droite.");
-                                }
-                            } else if (canPlayLeftFlipped || canPlayRightFlipped) {
-                                domino.retourner();
-                                if (canPlayLeftFlipped) {
-                                    table.addFirst(domino);
-                                    System.out.println(joueur.getNom() + " joue " + domino + " à gauche (retourné).");
-                                } else {
-                                    table.addLast(domino);
-                                    System.out.println(joueur.getNom() + " joue " + domino + " à droite (retourné).");
-                                }
-                            }
+                            joueur.retournerDominoSiBesoin(domino, table);
                         }
                         joueur.retirerDomino(domino);
                         aJoue = true;
@@ -255,6 +209,12 @@ public class JeuDomino {
 
             // Passer au joueur suivant
             joueurCourantIndex = currentTour(joueurCourantIndex + 1) - 1;
+        }
+    }
+
+    public void initialiserMainJoueur(List<Joueur> joueurs){
+        for (Joueur joueur : joueurs) {
+            joueur.viderMainJoueur();
         }
     }
 
@@ -342,14 +302,6 @@ public class JeuDomino {
         for (int i = 0; i < dominos.size(); i++) {
             System.out.print(dominos.get(i));
             if (i % 7 == 6) System.out.println();
-        }
-        System.out.println();
-    }
-
-    private void affichePioche(List<Domino> dominos) {
-        System.out.print("Domino Pioche: ");
-        for (Domino domino : dominos) {
-            System.out.print(domino + " ");
         }
         System.out.println();
     }
