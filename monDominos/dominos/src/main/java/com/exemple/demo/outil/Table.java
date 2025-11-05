@@ -8,8 +8,8 @@ import java.util.List;
 import com.exemple.demo.Domino;
 
 public class Table {
-     private final Deque<Domino> dominoTable = new LinkedList<>();
 
+    private Deque<Domino> dominoTable = new LinkedList<>();
 
     public void viderTable(){
         dominoTable.clear();
@@ -36,7 +36,7 @@ public class Table {
                 ajouterDroite(d);
                 break;
             default:
-            System.out.println("Choisissez où vous voulez placer le domino, 1 au début ou 2 à la fin");
+                System.out.println("Choisissez où vous voulez placer le domino, 1 au début ou 2 à la fin");
                 break;
         }
     }
@@ -47,6 +47,18 @@ public class Table {
 
     public int getDroiteTable(){
         return (dominoTable.isEmpty())? -1 : dominoTable.getLast().getDroite();
+    }
+
+    public void afficherTable() {
+        System.out.print("Table: ");
+        if (dominoTable.isEmpty()) {
+            System.out.println("[Vide]");
+        } else {
+            for (Domino d : dominoTable) {
+                System.out.print(d + " ");
+            }
+            System.out.println();
+        }
     }
 
     public Table(){

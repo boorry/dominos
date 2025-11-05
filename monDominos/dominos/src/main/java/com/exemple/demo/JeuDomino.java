@@ -2,7 +2,7 @@ package com.exemple.demo;
 import java.util.*;
 
 public class JeuDomino {
-   rivate List<Domino> pioche = new ArrayList<>();
+    private List<Domino> pioche = new ArrayList<>();
     private final List<Joueur> joueurs = new ArrayList<>();
     private final Deque<Domino> table = new LinkedList<>();
     private int joueurCourantIndex;
