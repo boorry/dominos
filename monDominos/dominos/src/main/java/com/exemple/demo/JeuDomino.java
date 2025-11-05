@@ -2,19 +2,15 @@ package com.exemple.demo;
 import java.util.*;
 
 public class JeuDomino {
-   private List<Domino> pioche = new ArrayList<>();
+   rivate List<Domino> pioche = new ArrayList<>();
     private final List<Joueur> joueurs = new ArrayList<>();
     private final Deque<Domino> table = new LinkedList<>();
     private int joueurCourantIndex;
     private final Map<Joueur, Integer> scores = new HashMap<>();
     private static final int SCORE_MAX = 120;
+    private TraitementBlocage blocage = new TraitementBlocage();
     private int manche;
     private final Scanner scanner = new Scanner(System.in);
-
-    public static void main(String[] args) {
-        JeuDomino jeu = new JeuDomino();
-        jeu.jouerPartie();
-    }
 
     public void jouerPartie() {
         // Saisie des noms des joueurs
@@ -54,10 +50,10 @@ public class JeuDomino {
             if (gagnantManche != null) {
                 scores.put(gagnantManche, scores.get(gagnantManche) + points);
                 System.out.println(gagnantManche.getNom() + " gagne la manche " + manche + " avec " + points + " points !");
-                afficherScores();
+                afficherScores(joueurs);
             } else {
                 System.out.println("Égalité dans la manche " + manche + ". Aucun point attribué.");
-                afficherScores();
+                afficherScores(joueurs);
             }
 
             // Vérifier si un joueur a atteint 120 points
@@ -67,7 +63,7 @@ public class JeuDomino {
                     System.out.println("=== Fin de la Partie après " + manche + " manches ===");
                     System.out.println(joueur.getNom() + " gagne la partie avec " + scores.get(joueur) + " points !");
                     System.out.println("\nRésumé final:");
-                    afficherScores();
+                    afficherScores(joueurs);
                     return;
                 }
             }
@@ -75,6 +71,8 @@ public class JeuDomino {
             manche++;
             // Réinitialiser pour la prochaine manche
             table.clear();
+
+            // Réinitialiser pour la prochaine manche
             initialiserMainJoueur(joueurs);
         }
     }
@@ -149,33 +147,31 @@ public class JeuDomino {
                         table.addLast(domino);
                         System.out.println(joueur.getNom() + " pose automatiquement " + domino + " comme premier domino.");
                     } else {
+
                         joueur.retournerDominoSiBesoin(domino, table);
+                        
                     }
                     joueur.retirerDomino(domino);
                     aJoue = true;
                     passesConsecutives = 0;
                 } else {
-                    // Cas 3 : Deux dominos ou plus
-                    System.out.print("Entrez un domino (format [x|y] ou x,y) ou appuyez sur Entrée pour passer : ");
+                    // Cas 3 : Deux dominos ou plus 
+                    joueur.afficherDominosJouable(dominosJouables);
+                    System.out.print("Entrez un domino (format [x|y] ou x,y): ");
                     String input = scanner.nextLine().trim();
 
                     if (input.isEmpty()) {
-                        System.out.println(joueur.getNom() + " passe son tour.");
-                        passesConsecutives++;
+                        //System.out.println(joueur.getNom() + " passe son tour.");
+                        //passesConsecutives++;
+                        System.out.println("Entrez un domino (format [x|y] ou x,y):");
                     } else {
-                        Domino domino;
-                        try {
-                            domino = Domino.parseDomino(input);
-                        } catch (IllegalArgumentException e) {
-                            System.out.println("Erreur : Format invalide. Utilisez [x|y] avec x,y entre 0 et 6.");
-                            continue;
-                        }
-
+                        Domino domino = Domino.parseDomino(input);
+                    /*   
                         if (!joueur.possedeDomino(domino)) {
                             System.out.println("Erreur : Vous ne possédez pas le domino " + domino + ".");
                             continue;
                         }
-
+                    */
                         if (!dominosJouables.contains(domino)) {
                             System.out.println("Erreur : Le domino " + domino + " ne correspond pas aux extrémités [" + gaucheTable + "|...] ou [...|" + droiteTable + "].");
                             continue;
@@ -186,7 +182,9 @@ public class JeuDomino {
                             table.addLast(domino);
                             System.out.println(joueur.getNom() + " pose " + domino + " comme premier domino.");
                         } else {
+
                             joueur.retournerDominoSiBesoin(domino, table);
+                            
                         }
                         joueur.retirerDomino(domino);
                         aJoue = true;
@@ -200,21 +198,16 @@ public class JeuDomino {
                 System.out.println("\n" + joueur.getNom() + " a gagné la manche " + manche + " (plus de dominos) !");
                 return joueur;
             }
+          
 
             // Vérifier blocage
             if (passesConsecutives >= joueurs.size()) {
                 System.out.println("\nJeu bloqué dans la manche " + manche + " !");
-                return casDeBlocage(joueurs);
+                return blocage.casDeBlocage(joueurs, manche);
             }
 
             // Passer au joueur suivant
             joueurCourantIndex = currentTour(joueurCourantIndex + 1) - 1;
-        }
-    }
-
-    public void initialiserMainJoueur(List<Joueur> joueurs){
-        for (Joueur joueur : joueurs) {
-            joueur.viderMainJoueur();
         }
     }
 
@@ -231,54 +224,13 @@ public class JeuDomino {
         return points;
     }
 
-    private Joueur casDeBlocage( List<Joueur> joueurs) {
-        if (joueurs.isEmpty()) {
-            System.out.println("Aucun joueur dans la liste");
-            return null;
-        } 
-        else {
-            Joueur gagnant = trouverGagnantMinPoints(joueurs);
-            int minimum = gagnant.calculerTotalPoints();
-            int nombreGagnants = compterJoueursAvecMinPoints(joueurs, minimum);
-            return annoncerResultatBlocage(gagnant, nombreGagnants, minimum, manche);
+    public void initialiserMainJoueur(List<Joueur> joueurs){
+        for (Joueur joueur : joueurs) {
+            joueur.viderMainJoueur();
         }
     }
 
-    private Joueur trouverGagnantMinPoints(List<Joueur> joueurs){
-        Joueur gagnant = joueurs.get(0);
-        int minimum = gagnant.calculerTotalPoints();
-        for(Joueur joueur: joueurs){
-            int points = joueur.calculerTotalPoints();
-            System.out.println(joueur.getNom() + ": " + points + " points"); // afficher les points des jouers
-            if(points < minimum){
-                minimum = points;
-                gagnant = joueur;
-            }
-        }
-        return gagnant;
-    }
-
-    private int compterJoueursAvecMinPoints(List<Joueur> joueurs, int minPoints){
-        int nombreGagnants = 0;
-        for(Joueur joueur: joueurs){
-            if(joueur.calculerTotalPoints() == minPoints){
-                nombreGagnants++;
-            }
-        }
-        return nombreGagnants;
-    }
-
-    private Joueur annoncerResultatBlocage(Joueur joueur, int nombreGangnant, int minimum, int manche){
-        if(nombreGangnant > 1){
-            System.out.println("Égalité avec " + minimum + " points - Aucun gagnant pour la manche " + manche);
-            return null;
-        } else{
-            System.out.println("Manche - " + manche + ". " + joueur.getNom() + " possède le minimum de point:" + minimum + ". Gangne la manche.");
-            return joueur;
-        }
-    }
-
-    private void afficherScores() {
+    private void afficherScores(List<Joueur> joueurs) {
         System.out.println("\nScores actuels après la manche " + manche + ":");
         for (Joueur joueur : joueurs) {
             System.out.println(joueur.getNom() + ": " + scores.get(joueur) + " points");
@@ -296,7 +248,7 @@ public class JeuDomino {
             System.out.println();
         }
     }
-
+    
     private void listerDominos(List<Domino> dominos) {
         System.out.println("Pioche initiale:");
         for (int i = 0; i < dominos.size(); i++) {

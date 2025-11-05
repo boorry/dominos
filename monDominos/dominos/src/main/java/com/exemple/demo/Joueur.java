@@ -4,6 +4,8 @@ import java.util.*;
 public class Joueur {
     private String nom;
     private List<Domino> main = new ArrayList<>();
+    private List<Domino> jouables = new ArrayList<>();
+    private List<Domino> resteMain = new ArrayList<>();
 
     public Joueur(String nom) {
         this.nom = nom;
@@ -27,6 +29,7 @@ public class Joueur {
 
     public void retirerDomino(Domino d) {
         main.remove(d);
+        retournerLesDominosNonJouer();
     }
 
     public boolean possedeDomino(Domino d) {
@@ -43,28 +46,40 @@ public class Joueur {
             return lesDominoJouable(main, gaucheTable, droiteTable);
         }
     }
-    
-    private boolean isDominoJouable(Domino item, int gaucheTable, int droiteTable){
-        return (gaucheTable == item.getGauche()
-                || droiteTable == item.getGauche() 
-                || gaucheTable == item.getDroite() 
-                || droiteTable == item.getDroite());
-    }
 
     private List<Domino> lesDominoJouable(List<Domino> enMain, int gaucheTable, int droiteTable){
-        List<Domino> jouables = new ArrayList<>();
-        for(Domino d: enMain){
-            if(isDominoJouable(d, gaucheTable, droiteTable)){
+        List<Domino> tmpListDomino = new ArrayList<>(main);
+        for(Domino d: tmpListDomino){
+            if(d.isDominoJouable(d, gaucheTable, droiteTable)){
                 jouables.add(d);
+                //resteMain.remove(d);
             }
         }
         return jouables;
     }
 
+    private void retournerLesDominosNonJouer(){
+        if(!jouables.isEmpty()){
+            for(Domino d: jouables){
+                //ajouterDomino(d);
+            }
+            jouables.clear();
+        }
+    }
+
+    public void afficherDominosJouable(List<Domino> jouables_){
+        System.out.print("Vos dominos jouables: ");
+        for(Domino jouable: jouables_){
+            System.out.print(" " + jouable);
+        }
+        System.out.println(" ");
+    }
+
     public void afficherDominosJoueur() {
-        System.out.print("Domino " + getNom() + ":");
+        System.out.print("Domino de " + getNom() + ":");
         for (Domino domino : main) {
-            System.out.print(" [" + domino.getGauche() + "|" + domino.getDroite() + "]");
+            //System.out.print(" [" + domino.getGauche() + "|" + domino.getDroite() + "]");
+            System.out.print(" " + domino);
         }
         System.out.println();
     }
@@ -84,6 +99,37 @@ public class Joueur {
             total += d.getValeurTotale();
         return total;
     }
+
+    public void joueEnRetournant(Domino domino, Deque<Domino> table){
+        int gaucheTable = table.isEmpty() ? -1 : table.getFirst().getGauche();
+        int droiteTable = table.isEmpty() ? -1 : table.getLast().getDroite();
+
+        boolean canPlayLeft = domino.getDroite() == gaucheTable;
+        boolean canPlayRight = domino.getGauche() == droiteTable;
+        boolean canPlayLeftFlipped = domino.getGauche() == gaucheTable;
+        boolean canPlayRightFlipped = domino.getDroite() == droiteTable;
+
+        if (canPlayLeft || canPlayRight) {
+            if (canPlayLeft) {
+                table.addFirst(domino);
+                System.out.println(getNom() + " pose automatiquement " + domino + " à gauche.");
+            } else {
+                table.addLast(domino);
+                System.out.println(getNom() + " pose automatiquement " + domino + " à droite.");
+            }
+        } else if (canPlayLeftFlipped || canPlayRightFlipped) {
+            domino.retourner();
+            if (canPlayLeftFlipped) {
+                table.addFirst(domino);
+                System.out.println(getNom() + " pose automatiquement " + domino + " à gauche (retourné).");
+            } else {
+                table.addLast(domino);
+                System.out.println(getNom() + " pose automatiquement " + domino + " à droite (retourné).");
+            }
+        }
+    }
+
+    // refactoring
 
     public void retournerDominoSiBesoin(Domino d, Deque<Domino> table) {
         if (peutJouerAGauche(d, table)) {
@@ -128,4 +174,5 @@ public class Joueur {
         int droiteTable = table.isEmpty() ? -1 : table.getLast().getDroite();
         return d.getDroite() == droiteTable;
     }
+
 }
