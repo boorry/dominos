@@ -1,0 +1,22 @@
+# Dossiers de compilation
+/bin/
+monDominos/dominos/target/
+
+# Fichiers compilés Java
+*.class
+
+# Fichiers de log
+*.log
+
+# Fichiers temporaires système / éditeurs
+*.swp
+*.swo
+.DS_Store
+
+# Fichiers de configuration IDE (au cas où tu ouvres sous Eclipse ou IntelliJ)
+.classpath
+.project
+.settings/
+.idea/
+*.iml
+
