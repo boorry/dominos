@@ -1,19 +1,15 @@
-package com.exemple.demo;
+package com.dominos;
+
+import com.dominos.console.ConsoleUI;
 
 /**
- * Hello world!
+ * Point d'entrée de l'application console.
  *
+ * Responsabilité unique : instancier ConsoleUI et lancer la session.
+ * Aucune logique ici — tout est dans ConsoleUI (I/O) et MoteurJeu (règles).
  */
-public class App 
-{
-    public static void main( String[] args )
-    {
-        System.out.println( "\t ****************************************  - BEGIN FIRST DOMINOS APP -   ****************************************" );
-
-        JeuDomino jeu = new JeuDomino();
-        jeu.jouerPartie();
-     
-        System.out.println( "\t ****************************************  - END DOMINOS APP -   *************************************************" );
+public class App {
+    public static void main(String[] args) {
+        new ConsoleUI().demarrer();
     }
-    // mvn exec:java -Dexec.mainClass="com.exemple.modele.App"
 }
