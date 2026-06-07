@@ -1,15 +1,15 @@
 package com.dominos;
 
-import com.dominos.console.ConsoleUI;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
- * Point d'entrée de l'application console.
- *
- * Responsabilité unique : instancier ConsoleUI et lancer la session.
- * Aucune logique ici — tout est dans ConsoleUI (I/O) et MoteurJeu (règles).
+ * Point d'entrée Spring Boot.
+ * Lance le serveur Tomcat sur le port 8080.
  */
+@SpringBootApplication
 public class App {
     public static void main(String[] args) {
-        new ConsoleUI().demarrer();
+        SpringApplication.run(App.class, args);
     }
 }
