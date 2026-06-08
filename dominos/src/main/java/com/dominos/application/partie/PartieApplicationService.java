@@ -1,98 +1,73 @@
 package com.dominos.application.partie;
 
+import com.dominos.domain.Domino;
 import com.dominos.domain.Joueur;
 import com.dominos.domain.Partie;
-import com.dominos.domain.Domino;
 import com.dominos.domain.DominoParser;
 import com.dominos.domain.partie.PartieEnAttente;
+import com.dominos.infrastructure.partie.JoueurPartieEntity;
 import com.dominos.infrastructure.partie.PartieEntity;
 import com.dominos.infrastructure.partie.PartieJpaRepository;
-import com.dominos.infrastructure.partie.JoueurPartieEntity;
 import com.dominos.moteur.EtatPartie;
 import com.dominos.moteur.MoteurJeu;
 import com.dominos.moteur.ResultatCoup;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * Service applicatif pour la gestion des parties.
  *
- * Responsabilités :
- *  - Créer une Partie depuis une PartieEnAttente (issue du matchmaking)
- *  - Stocker les parties actives en mémoire (Map id → Partie)
- *  - Persister l'état en base via PartieJpaRepository
- *  - Déléguer les règles au MoteurJeu
- *
- * Pourquoi stocker en mémoire ET en base ?
- *   La Partie (domain) contient l'état complet du jeu en cours
- *   (mains des joueurs, plateau, compteur de passes...).
- *   Sérialiser tout ça en base à chaque coup serait coûteux.
- *   On garde la Partie en mémoire pendant la partie,
- *   et on persiste les événements importants (début, fin, scores).
- *
- *   À l'Étape 6 (WebSocket), on pourra aussi notifier les joueurs
- *   depuis ce service.
+ * Version mise à jour avec notifications WebSocket.
+ * Après chaque action (jouerCoup, passerTour, creerPartie),
+ * un événement est envoyé à tous les joueurs via NotificationService.
  */
 @Service
 public class PartieApplicationService {
 
-    // Parties actives en mémoire : partieId → Partie
-    private final Map<String, Partie>   partiesActives = new ConcurrentHashMap<>();
-    // Correspondance partieId → liste des utilisateurIds
-    private final Map<String, List<String>> partieJoueurs = new ConcurrentHashMap<>();
+    private final Map<String, Partie> partiesActives = new ConcurrentHashMap<>();
 
-    private final MoteurJeu            moteur;
-    private final PartieJpaRepository  partieRepo;
+    private final MoteurJeu           moteur;
+    private final PartieJpaRepository partieRepo;
+    private final NotificationService notificationService;
 
     public PartieApplicationService(MoteurJeu moteur,
-                                    PartieJpaRepository partieRepo) {
-        this.moteur    = moteur;
-        this.partieRepo = partieRepo;
+                                    PartieJpaRepository partieRepo,
+                                    NotificationService notificationService) {
+        this.moteur              = moteur;
+        this.partieRepo          = partieRepo;
+        this.notificationService = notificationService;
     }
 
     // -------------------------------------------------------------------------
     // Création d'une partie
     // -------------------------------------------------------------------------
 
-    /**
-     * Crée et initialise une partie depuis le résultat du matchmaking.
-     * Appelé automatiquement quand 3 joueurs sont réunis.
-     *
-     * @return l'identifiant de la partie créée
-     */
     public String creerPartie(PartieEnAttente partieEnAttente) {
         String partieId = partieEnAttente.getId();
 
-        // Créer les joueurs domaine depuis les utilisateurs
         List<Joueur> joueurs = partieEnAttente.getJoueurs().stream()
             .map(u -> new Joueur(u.getId(), u.getPseudo()))
             .toList();
 
-        // Créer la Partie domaine
         Partie partie = new Partie(joueurs);
-
-        // Initialiser la première manche
         moteur.initialiserManche(partie);
-
-        // Stocker en mémoire
         partiesActives.put(partieId, partie);
-        partieJoueurs.put(partieId, joueurs.stream()
-            .map(Joueur::getId).toList());
 
-        // Persister en base
-        PartieEntity entity = new PartieEntity(
-            partieId, EtatPartie.EN_COURS, 1);
-
+        // Persister
+        PartieEntity entity = new PartieEntity(partieId, EtatPartie.EN_COURS, 1);
         for (Joueur j : joueurs) {
             entity.getJoueurs().add(
                 new JoueurPartieEntity(entity, j.getId(), j.getPseudo()));
         }
         partieRepo.save(entity);
+
+        // Notifier les joueurs via WebSocket
+        List<String> pseudos = joueurs.stream()
+            .map(Joueur::getPseudo).toList();
+        notificationService.notifierPartieCreee(partieId, pseudos);
 
         return partieId;
     }
@@ -101,55 +76,115 @@ public class PartieApplicationService {
     // Consultation
     // -------------------------------------------------------------------------
 
-    /**
-     * Retourne la partie active par son id.
-     */
     public Optional<Partie> getPartie(String partieId) {
         return Optional.ofNullable(partiesActives.get(partieId));
     }
 
-    /**
-     * Retourne les dominos jouables pour le joueur courant.
-     */
     public List<Domino> getDominosJouables(String partieId) {
-        Partie partie = getPartieOuException(partieId);
-        return moteur.getDominosJouables(partie);
+        return moteur.getDominosJouables(getPartieOuException(partieId));
     }
 
     // -------------------------------------------------------------------------
-    // Actions de jeu
+    // Jouer un coup
     // -------------------------------------------------------------------------
 
-    /**
-     * Le joueur joue un domino.
-     *
-     * @param partieId      identifiant de la partie
-     * @param utilisateurId identifiant du joueur qui joue
-     * @param dominoStr     domino au format "[x|y]" ou "x,y"
-     */
     public ResultatCoup jouerCoup(String partieId,
-                                  String utilisateurId,
-                                  String dominoStr) {
-        Partie partie  = getPartieOuException(partieId);
+                                   String utilisateurId,
+                                   String dominoStr) {
+        Partie partie = getPartieOuException(partieId);
         validerJoueurCourant(partie, utilisateurId);
 
         Domino domino  = DominoParser.parse(dominoStr);
         ResultatCoup r = moteur.jouerCoup(partie, domino);
 
         mettreAJourPersistance(partieId, partie, r);
+
+        // Construire le plateau pour la notification
+        List<String> plateauStr = partie.getPlateau().getDominos()
+            .stream().map(Domino::toString).toList();
+
+        Map<String, Integer> scores = construireScores(partie);
+
+        if (r.etat() == EtatPartie.EN_COURS) {
+            // Notifier coup joué + joueur suivant
+            notificationService.notifierCoupJoue(
+                partieId,
+                partie.getJoueurCourant() != null
+                    ? r.joueurActif().getPseudo()
+                    : utilisateurId,
+                r.message(),
+                plateauStr,
+                partie.getJoueurCourant().getPseudo(),
+                scores,
+                partie.getMancheCourante()
+            );
+
+        } else if (r.etat() == EtatPartie.VICTOIRE
+                || r.etat() == EtatPartie.BLOCAGE) {
+            // Notifier fin de manche
+            notificationService.notifierMancheTerminee(
+                partieId,
+                r.gagnant() != null ? r.gagnant().getPseudo() : null,
+                scores,
+                partie.getMancheCourante(),
+                r.message()
+            );
+
+        } else if (r.etat() == EtatPartie.TERMINEE) {
+            // Notifier fin de partie
+            notificationService.notifierPartieTerminee(
+                partieId,
+                r.gagnant() != null ? r.gagnant().getPseudo() : null,
+                scores,
+                r.message()
+            );
+            partiesActives.remove(partieId);
+        }
+
         return r;
     }
 
-    /**
-     * Le joueur passe son tour.
-     */
+    // -------------------------------------------------------------------------
+    // Passer un tour
+    // -------------------------------------------------------------------------
+
     public ResultatCoup passerTour(String partieId, String utilisateurId) {
-        Partie partie  = getPartieOuException(partieId);
+        Partie partie = getPartieOuException(partieId);
         validerJoueurCourant(partie, utilisateurId);
 
         ResultatCoup r = moteur.passerTour(partie);
-
         mettreAJourPersistance(partieId, partie, r);
+
+        Map<String, Integer> scores = construireScores(partie);
+
+        if (r.etat() == EtatPartie.EN_COURS) {
+            notificationService.notifierJoueurPasse(
+                partieId,
+                r.joueurActif().getPseudo(),
+                partie.getJoueurCourant().getPseudo(),
+                partie.getMancheCourante()
+            );
+
+        } else if (r.etat() == EtatPartie.BLOCAGE
+                || r.etat() == EtatPartie.VICTOIRE) {
+            notificationService.notifierMancheTerminee(
+                partieId,
+                r.gagnant() != null ? r.gagnant().getPseudo() : null,
+                scores,
+                partie.getMancheCourante(),
+                r.message()
+            );
+
+        } else if (r.etat() == EtatPartie.TERMINEE) {
+            notificationService.notifierPartieTerminee(
+                partieId,
+                r.gagnant() != null ? r.gagnant().getPseudo() : null,
+                scores,
+                r.message()
+            );
+            partiesActives.remove(partieId);
+        }
+
         return r;
     }
 
@@ -159,27 +194,32 @@ public class PartieApplicationService {
 
     private Partie getPartieOuException(String partieId) {
         return Optional.ofNullable(partiesActives.get(partieId))
-            .orElseThrow(() -> new PartieExceptions.PartieIntrouvableException(partieId));
+            .orElseThrow(() ->
+                new PartieExceptions.PartieIntrouvableException(partieId));
     }
 
     private void validerJoueurCourant(Partie partie, String utilisateurId) {
-        String idCourant = partie.getJoueurCourant().getId();
-        if (!idCourant.equals(utilisateurId)) {
+        if (!partie.getJoueurCourant().getId().equals(utilisateurId)) {
             throw new PartieExceptions.PasTonTourException(
                 partie.getJoueurCourant().getPseudo());
         }
+    }
+
+    private Map<String, Integer> construireScores(Partie partie) {
+        return partie.getScores().entrySet().stream()
+            .collect(Collectors.toMap(
+                e -> e.getKey().getPseudo(),
+                Map.Entry::getValue
+            ));
     }
 
     private void mettreAJourPersistance(String partieId,
                                          Partie partie,
                                          ResultatCoup r) {
         if (r.estTermine()) {
-            // Mettre à jour l'état en base
             partieRepo.findById(partieId).ifPresent(entity -> {
                 entity.setEtat(r.etat());
                 entity.setMancheCourante(partie.getMancheCourante());
-
-                // Mettre à jour les scores
                 for (JoueurPartieEntity jp : entity.getJoueurs()) {
                     partie.getJoueurs().stream()
                         .filter(j -> j.getId().equals(jp.getUtilisateurId()))
@@ -188,11 +228,6 @@ public class PartieApplicationService {
                 }
                 partieRepo.save(entity);
             });
-
-            // Retirer de la mémoire si partie terminée
-            if (r.etat() == EtatPartie.TERMINEE) {
-                partiesActives.remove(partieId);
-            }
         }
     }
 }
