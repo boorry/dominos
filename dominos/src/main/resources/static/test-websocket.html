@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Dominos — Test WebSocket</title>
+    <style>
+        body { font-family: monospace; max-width: 900px; margin: 20px auto; padding: 0 20px; }
+        h1   { color: #333; }
+        .section { margin-bottom: 20px; }
+        label  { display: block; margin: 5px 0 2px; font-weight: bold; }
+        input  { width: 400px; padding: 6px; margin-bottom: 8px; }
+        button { padding: 8px 16px; margin: 4px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 4px; }
+        button.red    { background: #f44336; }
+        button.blue   { background: #2196F3; }
+        button.orange { background: #FF9800; }
+        #log  { background: #1e1e1e; color: #00ff00; padding: 15px; height: 400px; overflow-y: auto; border-radius: 4px; white-space: pre-wrap; font-size: 12px; }
+        .status { padding: 8px; border-radius: 4px; margin: 10px 0; font-weight: bold; }
+        .connecte    { background: #c8e6c9; color: #2e7d32; }
+        .deconnecte  { background: #ffcdd2; color: #c62828; }
+    </style>
+</head>
+<body>
+
+<h1>🎲 Dominos — Test WebSocket</h1>
+
+<!-- Connexion WebSocket -->
+<div class="section">
+    <h3>1. Connexion WebSocket</h3>
+    <label>Partie ID :</label>
+    <input id="partieId" value="" placeholder="uuid de la partie"/>
+    <br>
+    <button onclick="connecter()" class="blue">Se connecter</button>
+    <button onclick="deconnecter()" class="red">Se déconnecter</button>
+    <div id="status" class="status deconnecte">Déconnecté</div>
+</div>
+
+<!-- Log des événements -->
+<div class="section">
+    <h3>2. Événements reçus</h3>
+    <button onclick="viderLog()" class="red">Vider</button>
+    <div id="log">En attente de connexion...</div>
+</div>
+
+<!-- Actions de jeu -->
+<div class="section">
+    <h3>3. Actions (via API REST)</h3>
+
+    <label>Utilisateur ID :</label>
+    <input id="utilisateurId" placeholder="uuid du joueur courant"/>
+
+    <label>Domino à jouer :</label>
+    <input id="domino" value="[5|5]" placeholder="[x|y]"/>
+
+    <button onclick="jouer()" class="blue">Jouer un domino</button>
+    <button onclick="passer()" class="orange">Passer le tour</button>
+    <button onclick="getEtat()">Voir l'état</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.2/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<script>
+    let stompClient = null;
+
+    function log(msg, couleur) {
+        const el   = document.getElementById('log');
+        const now  = new Date().toLocaleTimeString();
+        const line = couleur
+            ? `\x1b[32m[${now}] ${msg}\x1b[0m`
+            : `[${now}] ${msg}`;
+        el.textContent += `[${now}] ${msg}\n`;
+        el.scrollTop = el.scrollHeight;
+    }
+
+    function viderLog() {
+        document.getElementById('log').textContent = '';
+    }
+
+    function setStatus(connecte) {
+        const el = document.getElementById('status');
+        el.className = 'status ' + (connecte ? 'connecte' : 'deconnecte');
+        el.textContent = connecte ? '✅ Connecté' : '❌ Déconnecté';
+    }
+
+    function connecter() {
+        const partieId = document.getElementById('partieId').value.trim();
+        if (!partieId) { alert('Entrez un Partie ID'); return; }
+
+        const socket = new SockJS('http://localhost:8080/ws');
+        stompClient  = Stomp.over(socket);
+
+        // Désactiver les logs STOMP verbeux
+        stompClient.debug = null;
+
+        stompClient.connect({}, function(frame) {
+            setStatus(true);
+            log('✅ Connecté au WebSocket');
+            log('📡 Abonné à /topic/parties/' + partieId);
+
+            // S'abonner au topic de la partie
+            stompClient.subscribe('/topic/parties/' + partieId, function(message) {
+                const evenement = JSON.parse(message.body);
+                afficherEvenement(evenement);
+            });
+
+        }, function(error) {
+            setStatus(false);
+            log('❌ Erreur de connexion : ' + error);
+        });
+    }
+
+    function deconnecter() {
+        if (stompClient) {
+            stompClient.disconnect();
+            stompClient = null;
+            setStatus(false);
+            log('🔌 Déconnecté');
+        }
+    }
+
+    function afficherEvenement(e) {
+        log('─'.repeat(50));
+        log('📨 ÉVÉNEMENT : ' + e.type);
+        log('   Partie    : ' + e.partieId);
+        if (e.message)       log('   Message   : ' + e.message);
+        if (e.joueurActif)   log('   Actif     : ' + e.joueurActif);
+        if (e.joueurSuivant) log('   Suivant   : ' + e.joueurSuivant);
+        if (e.gagnant)       log('   Gagnant   : ' + e.gagnant);
+        if (e.plateau && e.plateau.length > 0)
+                             log('   Plateau   : ' + e.plateau.join(' '));
+        if (e.scores)        log('   Scores    : ' + JSON.stringify(e.scores));
+        if (e.joueurs)       log('   Joueurs   : ' + e.joueurs.join(', '));
+    }
+
+    // -------------------------------------------------------------------------
+    // Actions REST
+    // -------------------------------------------------------------------------
+
+    function partieId() {
+        return document.getElementById('partieId').value.trim();
+    }
+
+    async function jouer() {
+        const uid    = document.getElementById('utilisateurId').value.trim();
+        const domino = document.getElementById('domino').value.trim();
+        const pid    = partieId();
+        if (!uid || !pid) { alert('Renseignez Partie ID et Utilisateur ID'); return; }
+
+        const resp = await fetch(`http://localhost:8080/api/parties/${pid}/jouer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ utilisateurId: uid, domino: domino })
+        });
+        const data = await resp.json();
+        log('🎯 REST jouer → ' + JSON.stringify(data));
+    }
+
+    async function passer() {
+        const uid = document.getElementById('utilisateurId').value.trim();
+        const pid = partieId();
+        if (!uid || !pid) { alert('Renseignez Partie ID et Utilisateur ID'); return; }
+
+        const resp = await fetch(`http://localhost:8080/api/parties/${pid}/passer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ utilisateurId: uid })
+        });
+        const data = await resp.json();
+        log('⏭️  REST passer → ' + JSON.stringify(data));
+    }
+
+    async function getEtat() {
+        const pid = partieId();
+        if (!pid) { alert('Renseignez un Partie ID'); return; }
+
+        const resp = await fetch(`http://localhost:8080/api/parties/${pid}`);
+        const data = await resp.json();
+        log('📋 État partie → joueur courant: ' + data.joueurCourant
+            + ' | manche: ' + data.manche
+            + ' | plateau: ' + (data.plateau || []).join(' '));
+        log('   Main : ' + (data.mainJoueurCourant || []).join(' '));
+        log('   Jouables : ' + (data.dominosJouables || []).join(' '));
+    }
+</script>
+
+</body>
+</html>
