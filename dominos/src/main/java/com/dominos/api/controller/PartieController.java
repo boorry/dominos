@@ -2,6 +2,7 @@ package com.dominos.api.controller;
 
 import com.dominos.api.dto.partie.PartieDtos;
 import com.dominos.application.partie.PartieApplicationService;
+import com.dominos.application.partie.PartieExceptions;
 import com.dominos.domain.Domino;
 import com.dominos.domain.Partie;
 import com.dominos.moteur.ResultatCoup;
@@ -14,9 +15,10 @@ import java.util.List;
  * Controller REST — déroulement d'une partie.
  *
  * Endpoints :
- *   GET  /api/parties/{id}         → état complet de la partie
- *   POST /api/parties/{id}/jouer   → jouer un domino
- *   POST /api/parties/{id}/passer  → passer son tour
+ *   GET  /api/parties/{id}              → état de la partie
+ *   POST /api/parties/{id}/jouer        → jouer un domino
+ *   POST /api/parties/{id}/jouer/cote   → confirmer le côté (si CHOIX_REQUIS)
+ *   POST /api/parties/{id}/passer       → passer son tour
  */
 @RestController
 @RequestMapping("/api/parties")
@@ -29,80 +31,40 @@ public class PartieController {
     }
 
     // -------------------------------------------------------------------------
-    // GET /api/parties/{id} — État de la partie
+    // GET /api/parties/{id}
     // -------------------------------------------------------------------------
 
-    /**
-     * Retourne l'état complet de la partie.
-     *
-     * Requête :
-     *   GET /api/parties/uuid-partie
-     *
-     * Réponse :
-     *   200 OK
-     *   {
-     *     "id": "uuid-partie",
-     *     "etat": "EN_COURS",
-     *     "manche": 1,
-     *     "plateau": ["[3|5]", "[5|2]"],
-     *     "joueurCourant": "Alice",
-     *     "scores": { "Alice": 0, "Bob": 0, "Carl": 0 },
-     *     "mainJoueurCourant": ["[1|2]", "[6|3]"],
-     *     "dominosJouables": ["[1|2]"]
-     *   }
-     *
-     *   404 Not Found → partie inexistante ou terminée
-     */
     @GetMapping("/{id}")
     public ResponseEntity<PartieDtos.PartieReponse> getPartie(
             @PathVariable String id) {
 
         Partie partie = partieService.getPartie(id)
             .orElseThrow(() ->
-                new com.dominos.application.partie.PartieExceptions
-                    .PartieIntrouvableException(id));
+                new PartieExceptions.PartieIntrouvableException(id));
 
         List<Domino> jouables = partieService.getDominosJouables(id);
-
         return ResponseEntity.ok(
             PartieDtos.PartieReponse.depuis(id, partie, jouables));
     }
 
     // -------------------------------------------------------------------------
-    // POST /api/parties/{id}/jouer — Jouer un domino
+    // POST /api/parties/{id}/jouer
     // -------------------------------------------------------------------------
 
     /**
-     * Le joueur courant pose un domino.
+     * Le joueur pose un domino.
      *
-     * Requête :
-     *   POST /api/parties/uuid-partie/jouer
-     *   Content-Type: application/json
-     *   {
-     *     "utilisateurId": "uuid-alice",
-     *     "domino": "[3|5]"
-     *   }
+     * Réponse normale :
+     * { "aJoue": true, "etat": "EN_COURS", "message": "..." }
      *
-     * Réponses :
-     *   200 OK — coup joué :
-     *   {
-     *     "aJoue": true,
-     *     "etat": "EN_COURS",
-     *     "message": "Alice pose [3|5] à droite.",
-     *     "gagnant": null
-     *   }
-     *
-     *   200 OK — victoire :
-     *   {
-     *     "aJoue": true,
-     *     "etat": "VICTOIRE",
-     *     "message": "Alice gagne la manche 1 et marque 27 points !",
-     *     "gagnant": "Alice"
-     *   }
-     *
-     *   400 Bad Request → domino non jouable ou format invalide
-     *   403 Forbidden   → pas le tour de ce joueur
-     *   404 Not Found   → partie inexistante
+     * Réponse si ambiguïté (deux côtés possibles) :
+     * {
+     *   "aJoue": false,
+     *   "etat": "CHOIX_REQUIS",
+     *   "message": "Le domino [1|3] peut être posé des deux côtés...",
+     *   "cotesPossibles": ["GAUCHE", "DROITE"]
+     * }
+     * → Le client doit appeler POST /jouer/cote
      */
     @PostMapping("/{id}/jouer")
     public ResponseEntity<PartieDtos.CoupReponse> jouer(
@@ -110,60 +72,49 @@ public class PartieController {
             @RequestBody PartieDtos.JouerCoupRequete requete) {
 
         requete.valider();
-
-        ResultatCoup resultat = partieService.jouerCoup(
-            id,
-            requete.utilisateurId(),
-            requete.domino()
-        );
-
-        return ResponseEntity.ok(PartieDtos.CoupReponse.depuis(resultat));
+        ResultatCoup r = partieService.jouerCoup(
+            id, requete.utilisateurId(), requete.domino());
+        return ResponseEntity.ok(PartieDtos.CoupReponse.depuis(r));
     }
 
     // -------------------------------------------------------------------------
-    // POST /api/parties/{id}/passer — Passer son tour
+    // POST /api/parties/{id}/jouer/cote — NOUVEAU
     // -------------------------------------------------------------------------
 
     /**
-     * Le joueur courant passe son tour.
+     * Le joueur confirme le côté de pose après un CHOIX_REQUIS.
      *
      * Requête :
-     *   POST /api/parties/uuid-partie/passer
-     *   Content-Type: application/json
-     *   { "utilisateurId": "uuid-alice" }
+     * {
+     *   "utilisateurId": "uuid-alice",
+     *   "domino": "[1|3]",
+     *   "cote": "GAUCHE"
+     * }
      *
-     * Réponses :
-     *   200 OK — tour passé :
-     *   {
-     *     "aJoue": false,
-     *     "etat": "EN_COURS",
-     *     "message": "Alice passe son tour.",
-     *     "gagnant": null
-     *   }
-     *
-     *   200 OK — blocage :
-     *   {
-     *     "aJoue": false,
-     *     "etat": "BLOCAGE",
-     *     "message": "Jeu bloqué ! Alice gagne la manche.",
-     *     "gagnant": "Alice"
-     *   }
-     *
-     *   403 Forbidden → pas le tour de ce joueur
-     *   404 Not Found → partie inexistante
+     * Réponses : 200 OK, 400 Bad Request (côté invalide), 403 Forbidden
      */
+    @PostMapping("/{id}/jouer/cote")
+    public ResponseEntity<PartieDtos.CoupReponse> jouerAvecCote(
+            @PathVariable String id,
+            @RequestBody PartieDtos.JouerAvecCoteRequete requete) {
+
+        requete.valider();
+        ResultatCoup r = partieService.jouerCoupAvecCote(
+            id, requete.utilisateurId(), requete.domino(), requete.cote());
+        return ResponseEntity.ok(PartieDtos.CoupReponse.depuis(r));
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /api/parties/{id}/passer
+    // -------------------------------------------------------------------------
+
     @PostMapping("/{id}/passer")
     public ResponseEntity<PartieDtos.CoupReponse> passer(
             @PathVariable String id,
             @RequestBody PartieDtos.PasserTourRequete requete) {
 
         requete.valider();
-
-        ResultatCoup resultat = partieService.passerTour(
-            id,
-            requete.utilisateurId()
-        );
-
-        return ResponseEntity.ok(PartieDtos.CoupReponse.depuis(resultat));
+        ResultatCoup r = partieService.passerTour(id, requete.utilisateurId());
+        return ResponseEntity.ok(PartieDtos.CoupReponse.depuis(r));
     }
 }

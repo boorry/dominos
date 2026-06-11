@@ -2,16 +2,18 @@ package com.dominos.moteur;
 
 /**
  * États possibles d'une partie à un instant donné.
+ *
+ * CHOIX_REQUIS — nouvel état :
+ *   Le joueur a soumis un domino jouable des deux côtés.
+ *   Il doit maintenant choisir le côté (GAUCHE ou DROITE)
+ *   via jouerCoupAvecCote() avant que le coup soit validé.
  */
 public enum EtatPartie {
-    /** La partie n'a pas encore commencé. */
     EN_ATTENTE,
-    /** Une manche est en cours. */
     EN_COURS,
-    /** Un joueur a vidé sa main — victoire normale. */
+    /** Le joueur doit choisir le côté de pose. */
+    CHOIX_REQUIS,
     VICTOIRE,
-    /** Tous les joueurs ont passé consécutivement — blocage. */
     BLOCAGE,
-    /** La partie entière est terminée (score max atteint). */
     TERMINEE
 }

@@ -1,9 +1,10 @@
 package com.dominos.application.partie;
 
 import com.dominos.domain.Domino;
+import com.dominos.domain.DominoParser;
 import com.dominos.domain.Joueur;
 import com.dominos.domain.Partie;
-import com.dominos.domain.DominoParser;
+import com.dominos.domain.Plateau;
 import com.dominos.domain.partie.PartieEnAttente;
 import com.dominos.infrastructure.partie.JoueurPartieEntity;
 import com.dominos.infrastructure.partie.PartieEntity;
@@ -13,36 +14,37 @@ import com.dominos.moteur.MoteurJeu;
 import com.dominos.moteur.ResultatCoup;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
  * Service applicatif pour la gestion des parties.
  *
- * Version mise à jour avec notifications WebSocket.
- * Après chaque action (jouerCoup, passerTour, creerPartie),
- * un événement est envoyé à tous les joueurs via NotificationService.
+ * Mis à jour avec jouerCoupAvecCote() pour gérer le choix
+ * de côté quand un domino peut être posé des deux côtés.
  */
 @Service
 public class PartieApplicationService {
 
     private final Map<String, Partie> partiesActives = new ConcurrentHashMap<>();
 
-    private final MoteurJeu           moteur;
-    private final PartieJpaRepository partieRepo;
-    private final NotificationService notificationService;
+    private final MoteurJeu            moteur;
+    private final PartieJpaRepository  partieRepo;
+    private final NotificationService  notificationService;
 
     public PartieApplicationService(MoteurJeu moteur,
                                     PartieJpaRepository partieRepo,
                                     NotificationService notificationService) {
-        this.moteur              = moteur;
-        this.partieRepo          = partieRepo;
+        this.moteur             = moteur;
+        this.partieRepo         = partieRepo;
         this.notificationService = notificationService;
     }
 
     // -------------------------------------------------------------------------
-    // Création d'une partie
+    // Création
     // -------------------------------------------------------------------------
 
     public String creerPartie(PartieEnAttente partieEnAttente) {
@@ -56,7 +58,6 @@ public class PartieApplicationService {
         moteur.initialiserManche(partie);
         partiesActives.put(partieId, partie);
 
-        // Persister
         PartieEntity entity = new PartieEntity(partieId, EtatPartie.EN_COURS, 1);
         for (Joueur j : joueurs) {
             entity.getJoueurs().add(
@@ -64,10 +65,8 @@ public class PartieApplicationService {
         }
         partieRepo.save(entity);
 
-        // Notifier les joueurs via WebSocket
-        List<String> pseudos = joueurs.stream()
-            .map(Joueur::getPseudo).toList();
-        notificationService.notifierPartieCreee(partieId, pseudos);
+        notificationService.notifierPartieCreee(partieId,
+            joueurs.stream().map(Joueur::getPseudo).toList());
 
         return partieId;
     }
@@ -88,6 +87,12 @@ public class PartieApplicationService {
     // Jouer un coup
     // -------------------------------------------------------------------------
 
+    /**
+     * Le joueur joue un domino.
+     *
+     * Si le résultat est CHOIX_REQUIS, le domino n'est pas encore posé.
+     * Le joueur doit rappeler jouerCoupAvecCote() avec son choix.
+     */
     public ResultatCoup jouerCoup(String partieId,
                                    String utilisateurId,
                                    String dominoStr) {
@@ -97,55 +102,36 @@ public class PartieApplicationService {
         Domino domino  = DominoParser.parse(dominoStr);
         ResultatCoup r = moteur.jouerCoup(partie, domino);
 
-        mettreAJourPersistance(partieId, partie, r);
-
-        // Construire le plateau pour la notification
-        List<String> plateauStr = partie.getPlateau().getDominos()
-            .stream().map(Domino::toString).toList();
-
-        Map<String, Integer> scores = construireScores(partie);
-
-        if (r.etat() == EtatPartie.EN_COURS) {
-            // Notifier coup joué + joueur suivant
-            notificationService.notifierCoupJoue(
-                partieId,
-                partie.getJoueurCourant() != null
-                    ? r.joueurActif().getPseudo()
-                    : utilisateurId,
-                r.message(),
-                plateauStr,
-                partie.getJoueurCourant().getPseudo(),
-                scores,
-                partie.getMancheCourante()
-            );
-
-        } else if (r.etat() == EtatPartie.VICTOIRE
-                || r.etat() == EtatPartie.BLOCAGE) {
-            // Notifier fin de manche
-            notificationService.notifierMancheTerminee(
-                partieId,
-                r.gagnant() != null ? r.gagnant().getPseudo() : null,
-                scores,
-                partie.getMancheCourante(),
-                r.message()
-            );
-
-        } else if (r.etat() == EtatPartie.TERMINEE) {
-            // Notifier fin de partie
-            notificationService.notifierPartieTerminee(
-                partieId,
-                r.gagnant() != null ? r.gagnant().getPseudo() : null,
-                scores,
-                r.message()
-            );
-            partiesActives.remove(partieId);
+        // Si choix requis, on ne notifie pas encore — on attend le choix
+        if (!r.choixRequis()) {
+            notifierEtPersister(partieId, partie, r);
         }
 
         return r;
     }
 
+    /**
+     * Le joueur confirme le côté de pose après un CHOIX_REQUIS.
+     *
+     * @param coteStr "GAUCHE" ou "DROITE"
+     */
+    public ResultatCoup jouerCoupAvecCote(String partieId,
+                                           String utilisateurId,
+                                           String dominoStr,
+                                           String coteStr) {
+        Partie partie = getPartieOuException(partieId);
+        validerJoueurCourant(partie, utilisateurId);
+
+        Domino       domino = DominoParser.parse(dominoStr);
+        Plateau.Cote cote   = parseCote(coteStr);
+
+        ResultatCoup r = moteur.jouerCoupAvecCote(partie, domino, cote);
+        notifierEtPersister(partieId, partie, r);
+        return r;
+    }
+
     // -------------------------------------------------------------------------
-    // Passer un tour
+    // Passer son tour
     // -------------------------------------------------------------------------
 
     public ResultatCoup passerTour(String partieId, String utilisateurId) {
@@ -153,38 +139,7 @@ public class PartieApplicationService {
         validerJoueurCourant(partie, utilisateurId);
 
         ResultatCoup r = moteur.passerTour(partie);
-        mettreAJourPersistance(partieId, partie, r);
-
-        Map<String, Integer> scores = construireScores(partie);
-
-        if (r.etat() == EtatPartie.EN_COURS) {
-            notificationService.notifierJoueurPasse(
-                partieId,
-                r.joueurActif().getPseudo(),
-                partie.getJoueurCourant().getPseudo(),
-                partie.getMancheCourante()
-            );
-
-        } else if (r.etat() == EtatPartie.BLOCAGE
-                || r.etat() == EtatPartie.VICTOIRE) {
-            notificationService.notifierMancheTerminee(
-                partieId,
-                r.gagnant() != null ? r.gagnant().getPseudo() : null,
-                scores,
-                partie.getMancheCourante(),
-                r.message()
-            );
-
-        } else if (r.etat() == EtatPartie.TERMINEE) {
-            notificationService.notifierPartieTerminee(
-                partieId,
-                r.gagnant() != null ? r.gagnant().getPseudo() : null,
-                scores,
-                r.message()
-            );
-            partiesActives.remove(partieId);
-        }
-
+        notifierEtPersister(partieId, partie, r);
         return r;
     }
 
@@ -205,29 +160,67 @@ public class PartieApplicationService {
         }
     }
 
+    private Plateau.Cote parseCote(String coteStr) {
+        try {
+            return Plateau.Cote.valueOf(coteStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                "Côté invalide : '" + coteStr + "' — attendu GAUCHE ou DROITE");
+        }
+    }
+
     private Map<String, Integer> construireScores(Partie partie) {
         return partie.getScores().entrySet().stream()
             .collect(Collectors.toMap(
                 e -> e.getKey().getPseudo(),
-                Map.Entry::getValue
-            ));
+                Map.Entry::getValue));
     }
 
-    private void mettreAJourPersistance(String partieId,
-                                         Partie partie,
-                                         ResultatCoup r) {
-        if (r.estTermine()) {
-            partieRepo.findById(partieId).ifPresent(entity -> {
-                entity.setEtat(r.etat());
-                entity.setMancheCourante(partie.getMancheCourante());
-                for (JoueurPartieEntity jp : entity.getJoueurs()) {
-                    partie.getJoueurs().stream()
-                        .filter(j -> j.getId().equals(jp.getUtilisateurId()))
-                        .findFirst()
-                        .ifPresent(j -> jp.setScore(partie.getScore(j)));
-                }
-                partieRepo.save(entity);
-            });
+    private void notifierEtPersister(String partieId, Partie partie, ResultatCoup r) {
+        Map<String, Integer> scores = construireScores(partie);
+        List<String> plateauStr = partie.getPlateau().getDominos()
+            .stream().map(Domino::toString).toList();
+
+        if (r.etat() == EtatPartie.EN_COURS) {
+            if (r.aJoue()) {
+                notificationService.notifierCoupJoue(
+                    partieId, r.joueurActif().getPseudo(), r.message(),
+                    plateauStr, partie.getJoueurCourant().getPseudo(),
+                    scores, partie.getMancheCourante());
+            } else {
+                notificationService.notifierJoueurPasse(
+                    partieId, r.joueurActif().getPseudo(),
+                    partie.getJoueurCourant().getPseudo(),
+                    partie.getMancheCourante());
+            }
+        } else if (r.etat() == EtatPartie.VICTOIRE
+                || r.etat() == EtatPartie.BLOCAGE) {
+            notificationService.notifierMancheTerminee(
+                partieId,
+                r.gagnant() != null ? r.gagnant().getPseudo() : null,
+                scores, partie.getMancheCourante(), r.message());
+            mettreAJourPersistance(partieId, partie, r);
+        } else if (r.etat() == EtatPartie.TERMINEE) {
+            notificationService.notifierPartieTerminee(
+                partieId,
+                r.gagnant() != null ? r.gagnant().getPseudo() : null,
+                scores, r.message());
+            mettreAJourPersistance(partieId, partie, r);
+            partiesActives.remove(partieId);
         }
+    }
+
+    private void mettreAJourPersistance(String partieId, Partie partie, ResultatCoup r) {
+        partieRepo.findById(partieId).ifPresent(entity -> {
+            entity.setEtat(r.etat());
+            entity.setMancheCourante(partie.getMancheCourante());
+            for (JoueurPartieEntity jp : entity.getJoueurs()) {
+                partie.getJoueurs().stream()
+                    .filter(j -> j.getId().equals(jp.getUtilisateurId()))
+                    .findFirst()
+                    .ifPresent(j -> jp.setScore(partie.getScore(j)));
+            }
+            partieRepo.save(entity);
+        });
     }
 }
